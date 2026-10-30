@@ -10,11 +10,11 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
 - Interview answers recorded (see below).
 
 ## In progress
-- `docs/SPEC.md`: waiting on the protocol research (Sonnet agent) so RPC names are exact.
+- Awaiting owner's explicit "Spec approved" on `docs/SPEC.md` (draft v1 written, protocol in `docs/PROTOCOL.md`).
 
 ## Next
-1. Write SPEC.md (Goal, Data with exact RPC names, risk section, build order, decision log); owner says "Spec approved" — owner already said "proceed", confirm the spec text itself before Step 1.
-2. Step 1 onward per build order.
+1. Owner approves SPEC.md (also two pending decisions: cookie-paste import instead of bookmarklet; Vercel-IP go/no-go with owner-hosted Plan B). Record in decision log.
+2. Step 1 onward per SPEC §6.
 
 ## Decisions so far (move to SPEC decision log when it exists)
 - Own TypeScript client for NotebookLM internal RPC; free, via logged-in sessions.

@@ -18,4 +18,4 @@ Never paste secret values into chat. Claude generates the random ones and tells 
 - [ ] In claude.ai → Settings → Connectors → Add custom connector → paste the MCP URL Claude gives you at hand-off.
 
 ## On your device
-- [ ] On the vault page, drag the "Connect Google account" bookmarklet to your browser's bookmarks bar, open notebooklm.google.com signed in, click it. No password is ever typed.
+- [ ] Install a cookie-export extension (e.g. Cookie-Editor) in a desktop browser. For each Google account: open a **private window**, sign in at notebook.google.com, export the cookies as JSON, paste them on the vault page, then **close the private window without signing out**. No password is ever typed or stored.
