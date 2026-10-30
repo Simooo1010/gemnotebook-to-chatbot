@@ -1,12 +1,13 @@
 // Consent CSRF token: HMAC over the owner session token, with a key derived from OAUTH_SIGNING_KEY.
 import { createHmac } from "node:crypto";
+import { resolveSigningSecret } from "@/lib/vault/derive";
 import { MIN_KEY_BYTES } from "@/lib/auth/session";
 import { safeEqual } from "./crypto";
 
 type Env = Record<string, string | undefined>;
 
 function key(env: Env): Buffer | null {
-  const raw = env.OAUTH_SIGNING_KEY;
+  const raw = resolveSigningSecret(env);
   if (typeof raw !== "string" || Buffer.byteLength(raw, "utf8") < MIN_KEY_BYTES) return null;
   return createHmac("sha256", Buffer.from(raw, "utf8")).update("oauth-consent-csrf", "utf8").digest();
 }
