@@ -211,6 +211,8 @@ export interface Artifact {
   state: ArtifactState;
   mediaUrl: string | null;
   mediaMime: string | null;
+  /** Creation time, `row[15][0]` (seconds). Null when Google omits it. */
+  createdSec: number | null;
 }
 
 type Media = { url: string; kind: number | null; mime: string | null };
@@ -251,6 +253,7 @@ export function decodeArtifactRow(row: unknown, rpcId: string): Artifact {
     state: artifactState(statusCode, typeCode, media !== null),
     mediaUrl: media?.url ?? null,
     mediaMime: media?.mime ?? null,
+    createdSec: optNum(row, [15, 0]),
   };
 }
 

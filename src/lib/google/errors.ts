@@ -27,6 +27,14 @@ export class ExpiredAuthError extends GoogleTransportError {
   }
 }
 
+/** The upstream media server answered 416 to a Range request. `contentRange` is its `Content-Range` header, if any. */
+export class RangeNotSatisfiableError extends GoogleTransportError {
+  override readonly kind = "range_not_satisfiable";
+  constructor(readonly contentRange: string | null) {
+    super("requested byte range is not satisfiable");
+  }
+}
+
 export type HomepageFailure = "signed_out" | "region_gate" | "cookie_mismatch" | "unknown";
 
 export class HomepageError extends GoogleTransportError {

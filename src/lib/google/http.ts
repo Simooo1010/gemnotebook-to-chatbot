@@ -1,5 +1,5 @@
 import { cookieHeaderFor, mergeSetCookie, type CookieJar } from "@/lib/vault/jar";
-import { DisallowedHostError, ExpiredAuthError, TooManyRedirectsError } from "./errors";
+import { DisallowedHostError, ExpiredAuthError, RangeNotSatisfiableError, TooManyRedirectsError } from "./errors";
 
 /** Minimal fetch-compatible surface. Callers MUST pass redirect: "manual". Real `fetch` satisfies it. */
 export interface FetchInit {
@@ -128,9 +128,13 @@ export async function fetchWithJar(
 }
 
 export interface MediaResult {
+  /** 200 (whole file) or 206 (the requested byte range). */
+  status: number;
   body: ReadableStream<Uint8Array>;
   contentType: string | null;
   contentLength: number | null;
+  contentRange: string | null;
+  acceptRanges: string | null;
   finalUrl: string;
   jar: CookieJar;
 }
@@ -140,16 +144,24 @@ export async function fetchMedia(
   fetch: FetchLike,
   jar: CookieJar,
   url: string,
-  opts: FetchWithJarOptions & { signal?: AbortSignal } = {},
+  opts: FetchWithJarOptions & { signal?: AbortSignal; range?: string } = {},
 ): Promise<MediaResult> {
   const { response, finalUrl, jar: out } = await fetchWithJar(
     fetch,
     jar,
     url,
-    { method: "GET", headers: { ...browserHeaders("document"), Accept: "*/*" }, signal: opts.signal },
+    {
+      method: "GET",
+      headers: { ...browserHeaders("document"), Accept: "*/*", ...(opts.range ? { Range: opts.range } : {}) },
+      signal: opts.signal,
+    },
     opts,
   );
   const host = hostOf(finalUrl);
+  if (response.status === 416) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new RangeNotSatisfiableError(response.headers.get("content-range"));
+  }
   if (response.status < 200 || response.status >= 300) {
     await response.body?.cancel().catch(() => undefined);
     throw new ExpiredAuthError("http_status", host);
@@ -188,6 +200,15 @@ export async function fetchMedia(
       return reader.cancel(reason);
     },
   });
-  return { body, contentType, contentLength, finalUrl, jar: out };
+  return {
+    status: response.status,
+    body,
+    contentType,
+    contentLength,
+    contentRange: response.headers.get("content-range"),
+    acceptRanges: response.headers.get("accept-ranges"),
+    finalUrl,
+    jar: out,
+  };
 }
 

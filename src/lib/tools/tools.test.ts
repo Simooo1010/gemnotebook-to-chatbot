@@ -24,8 +24,20 @@ import {
   SourceNotReadyError,
   type SourceOps,
 } from "@/lib/notebooklm/sources";
+import { MediaLinkConfigError } from "@/lib/notebooklm/media-link";
+import type { MediaDownloader } from "@/lib/notebooklm/media-download";
+import {
+  ArtifactNotDownloadableError,
+  ArtifactNotFoundError,
+  ArtifactNotReadyError,
+  NotEnoughReadySourcesError,
+  StudioCreateAmbiguousError,
+  StudioCreateUnconfirmedError,
+  type StudioOps,
+} from "@/lib/notebooklm/studio";
+import { ExpiredAuthError } from "@/lib/google/errors";
 import { RpcAuthError, RpcDriftError, RpcNoFramesError, RpcQuotaError, RpcStatusError } from "@/lib/rpc/errors";
-import { RuntimeConfigError, type ToolRuntime } from "@/lib/runtime";
+import { RuntimeConfigError, type MediaLinks, type ToolRuntime } from "@/lib/runtime";
 import { KeyringConfigError, VaultCryptoError } from "@/lib/vault/crypto";
 import { JarError } from "@/lib/vault/jar";
 import type { Account } from "@/lib/vault/storage";
@@ -61,7 +73,14 @@ function fake(accounts: Account[], ops: Partial<Ops> = {}, srcOps: Partial<SrcOp
     getSourceGuide: vi.fn(),
     ...srcOps,
   } as SrcOps;
-  const rt: ToolRuntime = { listAccounts: async () => accounts, notebooks: notebooks as unknown as NotebookOps, sources: sources as unknown as SourceOps };
+  const rt: ToolRuntime = {
+    listAccounts: async () => accounts,
+    notebooks: notebooks as unknown as NotebookOps,
+    sources: sources as unknown as SourceOps,
+    studio: {} as StudioOps,
+    links: {} as MediaLinks,
+    media: {} as MediaDownloader,
+  };
   return { tools: createTools(() => rt), notebooks, sources };
 }
 const body = (r: { content: { text: string }[] }) => r.content[0]!.text;
@@ -223,6 +242,18 @@ describe("error mapping", () => {
     ["grpc status", new RpcStatusError("rLM1Ne", 5), /NOT_FOUND/],
     ["ambiguous", new AmbiguousMutationError("CCqFvf", "timeout"), /may or may not/],
     ["stale token", new StaleTokenMutationError("CCqFvf"), /NOT confirmed/],
+    ["no sources", new NotEnoughReadySourcesError("no_sources", { total: 0, ready: 0 }), /Nothing was started[\s\S]*no sources yet/],
+    ["none ready", new NotEnoughReadySourcesError("none_ready", { total: 3, ready: 0 }), /None of the notebook's 3 source/],
+    ["selected unknown", new NotEnoughReadySourcesError("selected_unknown", { total: 3, ready: 3 }), /not in this notebook/],
+    ["selected not ready", new NotEnoughReadySourcesError("selected_not_ready", { total: 3, ready: 1 }), /chosen sources is not ready/],
+    ["studio create unconfirmed", new StudioCreateUnconfirmedError(new Error("x")), /Do NOT start another one[\s\S]*studio_status/],
+    ["studio create ambiguous", new StudioCreateAmbiguousError(["a", "b"]), /several new overviews/],
+    ["artifact not found", new ArtifactNotFoundError(), /artifact id was not found/],
+    ["artifact generating", new ArtifactNotReadyError("generating"), /not ready yet[\s\S]*30 minutes/],
+    ["artifact failed", new ArtifactNotReadyError("failed"), /failed to generate/],
+    ["artifact not downloadable", new ArtifactNotDownloadableError(), /Only audio and video/],
+    ["media expired", new ExpiredAuthError("html", "x.google.com"), /studio_download_link again/],
+    ["media link config", new MediaLinkConfigError(), /not set up correctly/],
     ["source not found", new SourceNotFoundError(), /source id was not found/],
     ["source not ready (processing)", new SourceNotReadyError("processing"), /still being imported[\s\S]*15 seconds/],
     ["source not ready (error)", new SourceNotReadyError("error"), /failed to import/],
@@ -272,11 +303,16 @@ describe("error mapping", () => {
       Object.assign(new SourceNotReadyError("processing"), { message: SECRETS.join(" ") }),
       Object.assign(new SourceNotFoundError(), { message: SECRETS.join(" ") }),
       Object.assign(new SourceAddAmbiguousError([uuid(3)]), { message: SECRETS.join(" ") }),
+      Object.assign(new NotEnoughReadySourcesError("none_ready", { total: 1, ready: 0 }), { message: SECRETS.join(" ") }),
+      Object.assign(new StudioCreateUnconfirmedError(new Error(SECRETS.join(" "))), { message: SECRETS.join(" ") }),
+      Object.assign(new ArtifactNotReadyError("generating"), { message: SECRETS.join(" ") }),
+      Object.assign(new ExpiredAuthError("html", "https://x.google.com/media?sig=SECRET_SIGNED_URL"), { message: SECRETS.join(" ") + " https://lh3.googleusercontent.com/SECRET_SIGNED_URL" }),
+      Object.assign(new MediaLinkConfigError(), { message: SECRETS.join(" ") }),
     ];
     for (const e of leaky) {
       const text = body(toolError(e));
       for (const s of SECRETS) expect(text).not.toContain(s);
-      expect(text).not.toMatch(/\bat .*\.ts|stack/i);
+      expect(text).not.toMatch(/\bat .*\.ts|stack|SECRET_SIGNED_URL|googleusercontent/i);
     }
     // the unknown-error log carries only the class name
     expect(spy.mock.calls.flat().join(" ")).not.toContain("SYNTHETIC_SID_VALUE_x1");
