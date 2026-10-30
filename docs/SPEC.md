@@ -1,6 +1,6 @@
 # SPEC — NotebookLM Connector (MCP)
 
-Status: **DRAFT v1 — awaiting owner approval.** Protocol details live in `docs/PROTOCOL.md` (research of three open-source clients, read 2026-10-30). The product is now branded "Gemini Notebook" (since 2026-07-16); the wire protocol is unchanged. Call it NotebookLM in code and docs.
+Status: **v1 APPROVED 2026-10-30 by Simooo1010.** Protocol details live in `docs/PROTOCOL.md` (research of three open-source clients, read 2026-10-30). The product is now branded "Gemini Notebook" (since 2026-07-16); the wire protocol is unchanged. Call it NotebookLM in code and docs.
 
 ## 1. Goal (required)
 Simooo1010 uses Claude (web, phone, desktop) and adds one custom connector. From then on Claude can work with NotebookLM notebooks — list and create them, add sources, ask questions with citations, and start **native audio and video overviews** that are generated inside NotebookLM on the owner's own account quota (no paid API, no extra cost). Any number of Google accounts can be connected; each is isolated.
@@ -91,6 +91,6 @@ Each step is shippable and testable alone, ordered by the critical path (budget 
 | 2026-10-30 | v1 scope: notebooks+sources, chat, audio+video overviews; no deletes | Simooo1010 | 1 |
 | 2026-10-30 | Dependencies approved: next, react, typescript, @modelcontextprotocol/sdk, mcp-handler, zod, @supabase/supabase-js, vitest, eslint | Simooo1010 | CLAUDE.md |
 | 2026-10-30 | Budget policy (models, effort, resume-safe) | Simooo1010 | CLAUDE.md |
-| 2026-10-30 | Import by pasted cookie JSON, not a bookmarklet (HttpOnly cookies); extension optional in Step 8 | Claude, pending owner OK | 3 |
-| 2026-10-30 | Vercel-IP go/no-go in Step 3, Plan B = owner-hosted worker | Claude, pending owner OK | 4 |
-| — | Spec v1 approved | *pending* | all |
+| 2026-10-30 | Import by pasted cookie JSON, not a bookmarklet (HttpOnly cookies); extension optional in Step 8 | Simooo1010 | 3 |
+| 2026-10-30 | Vercel-IP go/no-go in Step 3; if gated, build continues on unaffected work and Claude stops to report options (Plan B = owner-hosted worker) | Simooo1010 | 4 |
+| 2026-10-30 | Spec v1 approved; autonomous run Steps 1–8 authorised | Simooo1010 | all |
