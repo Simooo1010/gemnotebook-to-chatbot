@@ -114,7 +114,7 @@ describe("dbFromSupabase", () => {
   /** Chainable thenable standing in for the PostgREST builder. */
   function builder(result: { data: unknown; error: unknown }, log: string[]) {
     const b: Record<string, unknown> = {};
-    for (const m of ["insert", "select", "update", "upsert", "delete", "eq", "order", "range", "single"]) {
+    for (const m of ["insert", "select", "update", "upsert", "delete", "eq", "lt", "order", "range", "single"]) {
       b[m] = (...a: unknown[]) => (log.push(`${m}:${JSON.stringify(a)}`), b);
     }
     b.then = (res: (v: unknown) => unknown) => res(result);
@@ -134,5 +134,14 @@ describe("dbFromSupabase", () => {
     expect(e).toBeInstanceOf(VaultStorageError);
     expect((e as Error).message).not.toContain("secret_table");
     await expect(bad.delete("accounts", { id: "a" })).rejects.toBeInstanceOf(VaultStorageError);
+    await expect(bad.deleteBefore!("accounts", "created_at", "2026-01-01T00:00:00.000Z")).rejects.toBeInstanceOf(VaultStorageError);
+  });
+
+  it("deleteBefore maps to a strict less-than filter plus optional equality", async () => {
+    const log: string[] = [];
+    const db = dbFromSupabase({ from: () => builder({ data: null, error: null }, log) } as never);
+    await db.deleteBefore!("login_attempts", "attempted_at", "2026-01-01T00:00:00.000Z", { key_hash: "k" });
+    expect(log).toContain('lt:["attempted_at","2026-01-01T00:00:00.000Z"]');
+    expect(log).toContain('eq:["key_hash","k"]');
   });
 });
