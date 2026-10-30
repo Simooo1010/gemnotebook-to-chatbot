@@ -50,8 +50,19 @@ src/app/login, src/app/vault  owner login page and vault page (+ small client fo
 src/lib/rpc/              pure batchexecute codec, params builders, row decoders (+ tests)
 src/lib/google/           transport: throttle, http (manual redirects), tokens, keep-alive, client, probe.ts (+ tests)
 src/lib/notebooklm/       typed operations: created.ts (write allow-list), notebooks.ts (+ tests)
+src/lib/oauth/            OAuth 2.1 AS: store ports + memory/Supabase adapters (hashes only), register (DCR), authorize, token (PKCE S256, rotating refresh), verify/revoke, metadata, consent CSRF, http.ts handlers, index.ts getOAuthDeps() (+ tests)
+src/lib/auth/next.ts      safe same-origin `next` path for post-login return (+ test in oauth/http.test.ts)
+src/app/.well-known/      oauth-protected-resource (+ /api/mcp suffix), oauth-authorization-server
+src/app/oauth/            authorize (consent page), consent (POST approve/deny), register, token, revoke
+src/app/api/vault/apps/   owner: [id]/revoke, revoke-all (connected apps)
 src/app/api/probe/google/ GET reachability probe (Bearer CRON_SECRET, metadata only)
-supabase/                 migrations (0001_vault.sql, applied in the final manual run) + README
+src/app/api/mcp/          GET/POST/DELETE/OPTIONS MCP endpoint (Streamable HTTP via mcp-handler, bearer auth)
+src/lib/mcp/route.ts      /api/mcp handling with injected deps: verifyAccessToken, 401 challenge, CORS (+ test)
+src/lib/tools/            MCP tools (accounts_list, notebooks_*, notebook_*), account resolution, error-to-isError mapping (+ tests)
+src/lib/runtime.ts        runtime composition (vault, throttle, usage/audit adapters, Google client, notebook ops), cached on globalThis (+ test)
+src/lib/google/supabase.ts UsageCounter + audit_log adapters over Db (+ test)
+docs/CONNECT.md           how to add the connector in claude.ai, consent screen, revoke
+supabase/                 migrations (0001_vault.sql, 0002_oauth.sql, applied in the final manual run) + README
 ```
 
 ## Commands

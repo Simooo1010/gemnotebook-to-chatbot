@@ -178,3 +178,31 @@ export function SignOutButton() {
     </button>
   );
 }
+
+/** Generic owner action button for the Connected apps section. */
+export function AppActionButton({ url, prompt, action, label }: { url: string; prompt: string; action: string; label: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  async function run() {
+    setBusy(true);
+    setMessage("");
+    try {
+      const res = await post(url);
+      if (res.ok) router.refresh();
+      else setMessage(await errorText(res));
+    } catch {
+      setMessage("Could not reach the server.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <Confirm prompt={prompt} action={action} label={label} onConfirm={run} busy={busy} />
+      <span role="status" aria-live="polite" className="msg">
+        {message}
+      </span>
+    </>
+  );
+}

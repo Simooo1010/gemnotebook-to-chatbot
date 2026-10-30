@@ -1,10 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-export function LoginForm() {
-  const router = useRouter();
+export function LoginForm({ next = "/vault" }: { next?: string }) {
   const [passphrase, setPassphrase] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -21,8 +19,8 @@ export function LoginForm() {
         body: JSON.stringify({ passphrase }),
       });
       if (res.ok) {
-        router.replace("/vault");
-        router.refresh();
+        // `next` was validated server-side as a same-origin path.
+        window.location.assign(next);
         return;
       }
       setMessage(res.status === 429 ? "Too many attempts. Wait a while and try again." : "That did not work.");

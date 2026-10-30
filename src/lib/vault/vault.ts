@@ -79,6 +79,12 @@ export function createVault({ accounts, sessions, keyring, now = () => new Date(
     },
 
     listAccounts: () => accounts.list(),
+
+    /** Flags an ACTIVE account as needing a fresh import. Never re-enables a disabled account; keeps the sealed session. */
+    async markNeedsReauth(accountId: string): Promise<void> {
+      const a = await accounts.get(accountId);
+      if (a && a.status === "active") await accounts.setStatus(accountId, "needs_reauth");
+    },
   };
 }
 

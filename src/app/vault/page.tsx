@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { cookieName, isSecureEnv, verifySessionToken } from "@/lib/auth/session";
 import { listAccountViews, type AccountView } from "@/lib/owner/handlers";
 import { getVault } from "@/lib/vault";
-import { ImportForm, KillButton, RevokeAllButton, SignOutButton } from "./VaultClient";
+import { getOAuthDeps } from "@/lib/oauth";
+import type { OAuthClient } from "@/lib/oauth/store";
+import { AppActionButton, ImportForm, KillButton, RevokeAllButton, SignOutButton } from "./VaultClient";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Vault · NotebookLM connector" };
@@ -23,6 +25,12 @@ export default async function VaultPage() {
     accounts = await listAccountViews(getVault());
   } catch {
     accounts = null; // storage not configured or unreachable; details are never shown
+  }
+  let apps: OAuthClient[] | null = null;
+  try {
+    apps = await getOAuthDeps().store.clients.list();
+  } catch {
+    apps = null;
   }
 
   return (
@@ -66,6 +74,38 @@ export default async function VaultPage() {
         </ol>
         <p className="meta">No password is ever typed or stored. The pasted text is encrypted and never shown again.</p>
         <ImportForm />
+      </section>
+
+      <section aria-labelledby="apps">
+        <h2 id="apps">Connected apps</h2>
+        {apps === null ? (
+          <p role="alert" className="msg">
+            The app list is not available.
+          </p>
+        ) : apps.length === 0 ? (
+          <p>No apps connected.</p>
+        ) : (
+          <>
+            <ul className="list">
+              {apps.map((c) => (
+                <li key={c.clientId} className="card">
+                  <div className="row">
+                    <strong>{c.clientName}</strong>
+                    <span className="meta">Registered {c.createdAt.toISOString().slice(0, 10)}</span>
+                  </div>
+                  <p className="meta">Returns to {[...new Set(c.redirectUris.map((u) => new URL(u).host))].join(", ")}</p>
+                  <AppActionButton
+                    url={`/api/vault/apps/${encodeURIComponent(c.clientId)}/revoke`}
+                    prompt="Revoke this app's access and remove it?"
+                    action="Revoke"
+                    label={`Revoke ${c.clientName}`}
+                  />
+                </li>
+              ))}
+            </ul>
+            <AppActionButton url="/api/vault/apps/revoke-all" prompt="Revoke access for every connected app?" action="Revoke all connector access" label="Revoke all connector access" />
+          </>
+        )}
       </section>
 
       <section aria-labelledby="danger">
