@@ -17,6 +17,9 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
 1. (done) Spec v1 approved 2026-10-30 incl. paste-JSON import and Vercel-IP go/no-go.
 2. Step 1 onward per SPEC §6.
 
+## Standing rules
+- Opus subagents: effort low at most (never higher). Sonnet/Haiku: High at most.
+
 ## Decisions so far (move to SPEC decision log when it exists)
 - Own TypeScript client for NotebookLM internal RPC; free, via logged-in sessions.
 - Remote HTTPS MCP on Vercel; multi-account encrypted vault (Supabase) + bookmarklet import; OAuth 2.1 in front.

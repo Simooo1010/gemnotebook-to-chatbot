@@ -54,7 +54,7 @@ Filled in by Step 1 (`npm run lint`, `npm run build`, `npm test`, `npm run dev`)
 
 ## Budget policy (credits) — owner instruction 2026-10-30
 - **Models:** research, read-only sweeps, docs, fixtures → Sonnet/Haiku. Core logic (RPC client, auth/OAuth, crypto vault, throttle), verification and fixing → Opus (or Fable if available). Review (gate 3) by a separate agent, once per gate, not per commit.
-- **Effort:** High at most. Never max or ultra. Lower for mechanical work.
+- **Effort:** Opus at **low** at most — never medium, high, max or ultra (owner rule 2026-10-30). Sonnet/Haiku: High at most. Compensate low effort with small steps, tests first for risky logic, and the independent review gate.
 - **Spend order:** critical path first (vault → auth → notebooks/sources → audio/video overview → chat). Polish and extras last. If credits run short, cut from the end of the build order, never from checks or safety rules.
 - **No waste:** no polling or sleep loops (events wake the session); don't re-read files already in context; parallel subagents only for independent work that pays off; one batched tool call over many small ones.
 - **Resume-safe:** every step ends committed + pushed, and `docs/PROGRESS.md` is updated in the same commit (done / in progress / next / open questions). A session that starts cold reads CLAUDE.md, WORKFLOW, SPEC, PROGRESS and continues without asking the owner to repeat anything.
