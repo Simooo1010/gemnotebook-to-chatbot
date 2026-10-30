@@ -43,3 +43,6 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
 - Remote HTTPS MCP on Vercel; multi-account encrypted vault (Supabase) + pasted-cookie-JSON import (bookmarklet impossible: HttpOnly); OAuth 2.1 in front.
 - v1 scope: notebooks + sources, chat with citations, audio + video overviews. Other Studio outputs out of v1. No deletes.
 - Approved deps: next, react, typescript, @modelcontextprotocol/sdk, mcp-handler, zod, @supabase/supabase-js, vitest, eslint.
+
+## Vercel-IP early probe
+- `scripts/probe-google.mjs` runs as `prebuild` on Vercel only (unauthenticated GET of the homepage from the build machine; metadata only; never fails the build). Result is read from the deployment build log and recorded here. Runtime function IPs may differ from build IPs; the signed-in check in the final manual run is the real test.
