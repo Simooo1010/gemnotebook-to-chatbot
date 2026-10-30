@@ -49,3 +49,5 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
 
 ## Vercel-IP early probe
 - `scripts/probe-google.mjs` runs as `prebuild` on Vercel only (unauthenticated GET of the homepage from the build machine; metadata only; never fails the build). Result is read from the deployment build log and recorded here. Runtime function IPs may differ from build IPs; the signed-in check in the final manual run is the real test.
+
+**Probe result (2026-10-30, Vercel build machine iad1, deployment for commit 6faa3ce):** unauthenticated GET `notebook.google.com/?hl=en` → single hop, HTTP 200, `gate:false`, no sign-in redirect (= normal signed-out landing page; no `location=unsupported`). Early signal only: Plan B (owner-hosted worker) NOT triggered. Not proof for signed-in RPC from runtime IPs; the real check is the final manual run.
