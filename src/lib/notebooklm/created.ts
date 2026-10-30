@@ -1,7 +1,7 @@
 // Write allow-list: ids of objects this app created (SPEC §2 `created_objects`). SERVER ONLY (Supabase adapter).
 import { createServiceDb, VaultStorageError, type Db } from "@/lib/vault/supabase";
 
-export type CreatedKind = "notebook" | "artifact";
+export type CreatedKind = "notebook" | "artifact" | "source";
 
 export interface CreatedObjects {
   record(accountId: string, kind: CreatedKind, objectId: string): Promise<void>;

@@ -18,6 +18,7 @@ import {
   UnknownHomepageError,
 } from "@/lib/google/errors";
 import { CreatedObjectsConfigError } from "@/lib/notebooklm/created";
+import { SourceAddAmbiguousError, SourceAddUnconfirmedError, SourceNotFoundError, SourceNotReadyError } from "@/lib/notebooklm/sources";
 import { CreateAmbiguousError, CreateNotAppliedError, InvalidCursorError, NotWritableError } from "@/lib/notebooklm/notebooks";
 import { RpcAuthError, RpcDriftError, RpcNoFramesError, RpcQuotaError, RpcStatusError } from "@/lib/rpc/errors";
 import { RuntimeConfigError } from "@/lib/runtime";
@@ -35,13 +36,15 @@ export interface ToolResult {
 }
 
 export const MAX_RESULT_CHARS = 24_000;
+/** Larger cap for tools whose whole purpose is returning text (source_get_text). */
+export const MAX_TEXT_RESULT_CHARS = 100_000;
 
 const text = (t: string, isError?: boolean): ToolResult => ({ content: [{ type: "text", text: t }], ...(isError ? { isError: true } : {}) });
 
 /** Compact JSON; if it exceeds the cap, say so instead of returning a cut-off (invalid) document. */
-export function ok(data: unknown): ToolResult {
+export function ok(data: unknown, maxChars: number = MAX_RESULT_CHARS): ToolResult {
   const json = JSON.stringify(data);
-  if (json.length <= MAX_RESULT_CHARS) return text(json);
+  if (json.length <= maxChars) return text(json);
   return text(JSON.stringify({ truncated: true, note: "Result was too large to return. Ask for fewer items (smaller limit) or a narrower request." }));
 }
 
@@ -64,11 +67,29 @@ export function toolError(e: unknown): ToolResult {
   if (e instanceof CreateAmbiguousError) {
     return fail("Creating the notebook failed in an unclear way and several notebooks could be the result. List notebooks to check before trying again.");
   }
+  if (e instanceof SourceNotFoundError) {
+    return fail("That source id was not found in this notebook. Call notebook_get to see the notebook's sources and their ids.");
+  }
+  if (e instanceof SourceNotReadyError) {
+    const why =
+      e.status === "error"
+        ? "It failed to import, so it cannot be read. Add it again if needed."
+        : "It is still being imported. Call notebook_get again in 15 seconds or more and retry once its status is 'ready'.";
+    return fail(`The source is not ready (status: ${e.status}). ${why}`);
+  }
+  if (e instanceof SourceAddUnconfirmedError) {
+    return fail(
+      "Adding the source did not give a clear answer and the notebook does not show it yet. Do NOT add it again right away: wait 15 seconds or more, call notebook_get, and add it only if it is still missing.",
+    );
+  }
+  if (e instanceof SourceAddAmbiguousError) {
+    return fail("Adding the source gave an unclear answer and several sources could be the result. Call notebook_get to check before adding anything again.");
+  }
   if (e instanceof StaleTokenMutationError) {
-    return fail("The change was NOT confirmed (the session token was stale and has been refreshed). List notebooks to see whether it was applied, then retry only if it was not.");
+    return fail("The change was NOT confirmed (the session token was stale and has been refreshed). Check with notebooks_list or notebook_get whether it was applied, then retry only if it was not.");
   }
   if (e instanceof AmbiguousMutationError) {
-    return fail("The change may or may not have been applied. Do not retry yet: list notebooks first to check.");
+    return fail("The change may or may not have been applied. Do not retry yet: check with notebooks_list or notebook_get first.");
   }
   if (e instanceof AccountNeedsReauthError || e instanceof SignedOutError || e instanceof CookieMismatchError || e instanceof RotateAuthError || e instanceof RpcAuthError) {
     return fail(`This Google account's session has expired or been signed out. ${REIMPORT}`);

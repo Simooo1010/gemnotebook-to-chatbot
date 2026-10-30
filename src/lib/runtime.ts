@@ -6,6 +6,7 @@ import { MemoryAuditSink, SupabaseAuditSink, SupabaseUsageCounter } from "@/lib/
 import { MemoryUsageCounter, createThrottle, type UsageCounter } from "@/lib/google/throttle";
 import { getCreatedObjects, type CreatedObjects } from "@/lib/notebooklm/created";
 import { createNotebookOps, type NotebookOps } from "@/lib/notebooklm/notebooks";
+import { createSourceOps, type SourceOps } from "@/lib/notebooklm/sources";
 import { getVault } from "@/lib/vault";
 import { createServiceDb } from "@/lib/vault/supabase";
 import type { Account } from "@/lib/vault/storage";
@@ -23,6 +24,7 @@ export const DEFAULT_NOTEBOOKLM_BASE_URL = "https://notebook.google.com";
 export interface ToolRuntime {
   listAccounts(): Promise<Account[]>;
   notebooks: NotebookOps;
+  sources: SourceOps;
 }
 
 export class RuntimeConfigError extends Error {
@@ -86,7 +88,8 @@ export function createRuntime(p: RuntimeParts): ToolRuntime {
     now: p.now,
   });
   const notebooks = createNotebookOps({ client, created: p.created, rpcOverridesJson, now: p.now });
-  return { listAccounts: () => p.vault.listAccounts(), notebooks };
+  const sources = createSourceOps({ client, created: p.created, notebooks, rpcOverridesJson, now: p.now });
+  return { listAccounts: () => p.vault.listAccounts(), notebooks, sources };
 }
 
 const g = globalThis as unknown as { __runtime?: ToolRuntime };

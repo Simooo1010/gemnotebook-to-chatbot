@@ -17,6 +17,13 @@ import {
 } from "@/lib/google/errors";
 import { CreatedObjectsConfigError } from "@/lib/notebooklm/created";
 import { CreateAmbiguousError, CreateNotAppliedError, InvalidCursorError, NotWritableError, type NotebookOps } from "@/lib/notebooklm/notebooks";
+import {
+  SourceAddAmbiguousError,
+  SourceAddUnconfirmedError,
+  SourceNotFoundError,
+  SourceNotReadyError,
+  type SourceOps,
+} from "@/lib/notebooklm/sources";
 import { RpcAuthError, RpcDriftError, RpcNoFramesError, RpcQuotaError, RpcStatusError } from "@/lib/rpc/errors";
 import { RuntimeConfigError, type ToolRuntime } from "@/lib/runtime";
 import { KeyringConfigError, VaultCryptoError } from "@/lib/vault/crypto";
@@ -35,7 +42,8 @@ const A1 = acct("a1", "Main");
 const A2 = acct("a2", "Work");
 
 type Ops = { [K in keyof NotebookOps]: ReturnType<typeof vi.fn> };
-function fake(accounts: Account[], ops: Partial<Ops> = {}) {
+type SrcOps = { [K in keyof SourceOps]: ReturnType<typeof vi.fn> };
+function fake(accounts: Account[], ops: Partial<Ops> = {}, srcOps: Partial<SrcOps> = {}) {
   const notebooks = {
     listNotebooks: vi.fn(),
     createNotebook: vi.fn(),
@@ -44,8 +52,17 @@ function fake(accounts: Account[], ops: Partial<Ops> = {}) {
     notebookSummary: vi.fn(),
     ...ops,
   } as Ops;
-  const rt: ToolRuntime = { listAccounts: async () => accounts, notebooks: notebooks as unknown as NotebookOps };
-  return { tools: createTools(() => rt), notebooks };
+  const sources = {
+    addSourceUrl: vi.fn(),
+    addSourceYoutube: vi.fn(),
+    addSourceText: vi.fn(),
+    addSourceDrive: vi.fn(),
+    getSourceText: vi.fn(),
+    getSourceGuide: vi.fn(),
+    ...srcOps,
+  } as SrcOps;
+  const rt: ToolRuntime = { listAccounts: async () => accounts, notebooks: notebooks as unknown as NotebookOps, sources: sources as unknown as SourceOps };
+  return { tools: createTools(() => rt), notebooks, sources };
 }
 const body = (r: { content: { text: string }[] }) => r.content[0]!.text;
 const json = (r: { content: { text: string }[] }) => JSON.parse(body(r)) as Record<string, unknown>;
@@ -206,6 +223,11 @@ describe("error mapping", () => {
     ["grpc status", new RpcStatusError("rLM1Ne", 5), /NOT_FOUND/],
     ["ambiguous", new AmbiguousMutationError("CCqFvf", "timeout"), /may or may not/],
     ["stale token", new StaleTokenMutationError("CCqFvf"), /NOT confirmed/],
+    ["source not found", new SourceNotFoundError(), /source id was not found/],
+    ["source not ready (processing)", new SourceNotReadyError("processing"), /still being imported[\s\S]*15 seconds/],
+    ["source not ready (error)", new SourceNotReadyError("error"), /failed to import/],
+    ["source add unconfirmed", new SourceAddUnconfirmedError(new Error("x")), /Do NOT add it again/],
+    ["source add ambiguous", new SourceAddAmbiguousError([uuid(1), uuid(2)]), /several sources/],
     ["create not applied", new CreateNotAppliedError(new AmbiguousMutationError("CCqFvf", "t")), /nothing was created/],
     ["create ambiguous", new CreateAmbiguousError([uuid(1), uuid(2)]), /several notebooks/],
     ["not writable", new NotWritableError(uuid(9)), /only change notebooks it created/],
@@ -246,6 +268,10 @@ describe("error mapping", () => {
       Object.assign(new RpcDriftError("wXbhsf"), { message: SECRETS.join(" ") }),
       Object.assign(new JarError("invalid_format"), { message: SECRETS.join(" ") }),
       Object.assign(new HttpStatusError("wXbhsf", 500), { message: SECRETS.join(" ") }),
+      Object.assign(new SourceAddUnconfirmedError(new Error(SECRETS.join(" "))), { message: SECRETS.join(" ") }),
+      Object.assign(new SourceNotReadyError("processing"), { message: SECRETS.join(" ") }),
+      Object.assign(new SourceNotFoundError(), { message: SECRETS.join(" ") }),
+      Object.assign(new SourceAddAmbiguousError([uuid(3)]), { message: SECRETS.join(" ") }),
     ];
     for (const e of leaky) {
       const text = body(toolError(e));
@@ -279,5 +305,109 @@ describe("ok()", () => {
     expect(body(ok({ a: 1 }))).toBe('{"a":1}');
     const big = ok({ x: "y".repeat(MAX_RESULT_CHARS) });
     expect(JSON.parse(body(big))).toMatchObject({ truncated: true });
+  });
+});
+
+describe("source tools", () => {
+  const NB = uuid(1);
+  const SID = uuid(50);
+  const added = { sourceId: SID, title: "Page", status: "processing" as const, reconciled: false };
+
+  it("add tools resolve the account, call the ops and return id/title/status with the wait hint", async () => {
+    const { tools, sources } = fake([A1]);
+    sources.addSourceUrl!.mockResolvedValue(added);
+    sources.addSourceYoutube!.mockResolvedValue({ ...added, title: "Video" });
+    sources.addSourceText!.mockResolvedValue({ ...added, title: "Note" });
+    sources.addSourceDrive!.mockResolvedValue({ ...added, status: "ready" });
+
+    const r = json(await tools.sourceAddUrl.run({ notebookId: NB, url: "https://example.com/a" }));
+    expect(sources.addSourceUrl).toHaveBeenCalledWith("a1", NB, "https://example.com/a");
+    expect(r).toMatchObject({ account: { id: "a1" }, notebookId: NB, source: { id: SID, title: "Page", status: "processing" }, reconciled: false });
+    expect(r.next).toMatch(/notebook_get[\s\S]*15 seconds/);
+
+    await tools.sourceAddYoutube.run({ notebookId: NB, url: "https://youtu.be/abcdefghijk" });
+    expect(sources.addSourceYoutube).toHaveBeenCalledWith("a1", NB, "https://youtu.be/abcdefghijk");
+    await tools.sourceAddText.run({ notebookId: NB, title: "Note", content: "hello" });
+    expect(sources.addSourceText).toHaveBeenCalledWith("a1", NB, "Note", "hello");
+    const d = json(await tools.sourceAddDrive.run({ notebookId: NB, fileId: "1AbCdEfGhIjKlMnOp", mimeType: "application/pdf", title: "Doc" }));
+    expect(sources.addSourceDrive).toHaveBeenCalledWith("a1", NB, { fileId: "1AbCdEfGhIjKlMnOp", mimeType: "application/pdf", title: "Doc" });
+    expect(d.next).toBe("The source is ready.");
+  });
+
+  it("add tools need an explicit account when several are active (no Google call)", async () => {
+    const { tools, sources } = fake([A1, A2]);
+    const r = await tools.sourceAddUrl.run({ notebookId: NB, url: "https://example.com" });
+    expect(r.isError).toBe(true);
+    expect(sources.addSourceUrl).not.toHaveBeenCalled();
+  });
+
+  it("source_get_text returns text with the truncated flag, and keeps a 60k text intact (own size cap)", async () => {
+    const { tools, sources } = fake([A1]);
+    sources.getSourceText!.mockResolvedValue({ sourceId: SID, title: "T", text: "é".repeat(60_000), truncated: true, totalChars: 90_000 });
+    const r = await tools.sourceGetText.run({ notebookId: NB, sourceId: SID });
+    expect(r.isError).toBeUndefined();
+    const out = json(r);
+    expect((out.text as string).length).toBe(60_000);
+    expect(out).toMatchObject({ truncated: true, totalChars: 90_000, source: { id: SID, title: "T" } });
+  });
+
+  it("source_get_guide returns summary and keywords, capped", async () => {
+    const { tools, sources } = fake([A1]);
+    sources.getSourceGuide!.mockResolvedValue({ sourceId: SID, title: "T", summary: "s".repeat(21_000), keywords: Array.from({ length: 60 }, (_, i) => `k${i}`) });
+    const out = json(await tools.sourceGetGuide.run({ notebookId: NB, sourceId: SID }));
+    expect((out.summary as string).length).toBe(20_000);
+    expect(out).toMatchObject({ summaryTruncated: true });
+    expect((out.keywords as string[]).length).toBe(50);
+  });
+
+  it("not-ready and unconfirmed-add errors become guidance, not stack traces", async () => {
+    const { tools, sources } = fake([A1]);
+    sources.getSourceText!.mockRejectedValue(new SourceNotReadyError("processing"));
+    sources.addSourceUrl!.mockRejectedValue(new SourceAddUnconfirmedError(new Error(SECRETS.join(" "))));
+    const a = await tools.sourceGetText.run({ notebookId: NB, sourceId: SID });
+    expect(a.isError).toBe(true);
+    expect(body(a)).toMatch(/not ready[\s\S]*notebook_get/);
+    const b = await tools.sourceAddUrl.run({ notebookId: NB, url: "https://example.com" });
+    expect(b.isError).toBe(true);
+    for (const s of SECRETS) expect(body(b)).not.toContain(s);
+  });
+
+  it("annotations: adds are write/non-idempotent/open-world/non-destructive; reads are read-only", () => {
+    const { tools } = fake([A1]);
+    for (const t of [tools.sourceAddUrl, tools.sourceAddYoutube, tools.sourceAddText, tools.sourceAddDrive]) {
+      expect(t.annotations).toEqual({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
+      expect(t.description).toMatch(/notebook_get/);
+      expect(t.description).toMatch(/15 seconds/);
+    }
+    for (const t of [tools.sourceGetText, tools.sourceGetGuide]) {
+      expect(t.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false, openWorldHint: true });
+    }
+    expect(Object.values(tools).map((t) => t.name)).toEqual(
+      expect.arrayContaining(["source_add_url", "source_add_youtube", "source_add_text", "source_add_drive", "source_get_text", "source_get_guide"]),
+    );
+  });
+
+  it("input schemas enforce the validation rules before any call", () => {
+    const { tools } = fake([A1]);
+    const u = tools.sourceAddUrl.inputSchema;
+    expect(u.safeParse({ notebookId: NB, url: "https://example.com/a" }).success).toBe(true);
+    for (const bad of ["ftp://example.com", "javascript:alert(1)", "not a url", "https://user:pw@example.com/", "https://example.com/" + "a".repeat(2100)]) {
+      expect(u.safeParse({ notebookId: NB, url: bad }).success).toBe(false);
+    }
+    expect(u.safeParse({ notebookId: "nope", url: "https://example.com" }).success).toBe(false);
+    const y = tools.sourceAddYoutube.inputSchema;
+    expect(y.safeParse({ notebookId: NB, url: "https://www.youtube.com/watch?v=abc" }).success).toBe(true);
+    expect(y.safeParse({ notebookId: NB, url: "https://example.com/watch?v=abc" }).success).toBe(false);
+    const t = tools.sourceAddText.inputSchema;
+    expect(t.safeParse({ notebookId: NB, title: "", content: "x" }).success).toBe(false);
+    expect(t.safeParse({ notebookId: NB, title: "x".repeat(201), content: "x" }).success).toBe(false);
+    expect(t.safeParse({ notebookId: NB, title: "ok", content: "" }).success).toBe(false);
+    expect(t.safeParse({ notebookId: NB, title: "ok", content: "x".repeat(200_001) }).success).toBe(false);
+    expect(t.safeParse({ notebookId: NB, title: "ok", content: "x".repeat(200_000) }).success).toBe(true);
+    const d = tools.sourceAddDrive.inputSchema;
+    expect(d.safeParse({ notebookId: NB, fileId: "short", mimeType: "application/pdf", title: "t" }).success).toBe(false);
+    expect(d.safeParse({ notebookId: NB, fileId: "1AbCdEfGhIjKl/../x", mimeType: "application/pdf", title: "t" }).success).toBe(false);
+    expect(d.safeParse({ notebookId: NB, fileId: "1AbCdEfGhIjKlMnOp", mimeType: "text/html", title: "t" }).success).toBe(false);
+    expect(tools.sourceGetText.inputSchema.safeParse({ notebookId: NB, sourceId: "x" }).success).toBe(false);
   });
 });
