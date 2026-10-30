@@ -2,6 +2,8 @@
 
 Status: 0 of 9 done.
 
+> **Everything on this page is done in ONE batch at the very end** (owner decision 2026-10-30). Until then nothing here blocks Claude; it builds against fixtures and adapters and will say clearly what is not yet verified live.
+
 ## Accounts and access
 - [ ] Confirm the GitHub connection to Claude covers `Simooo1010/gemnotebook-to-chatbot` (already attached to this session).
 - [ ] Vercel: import the `gemnotebook-to-chatbot` repo as a project (Claude can do this through the Vercel connector; tell Claude if it is refused).
