@@ -18,6 +18,15 @@ import {
   UnknownHomepageError,
 } from "@/lib/google/errors";
 import { CreatedObjectsConfigError } from "@/lib/notebooklm/created";
+import { MediaLinkConfigError } from "@/lib/notebooklm/media-link";
+import {
+  ArtifactNotDownloadableError,
+  ArtifactNotFoundError,
+  ArtifactNotReadyError,
+  NotEnoughReadySourcesError,
+  StudioCreateAmbiguousError,
+  StudioCreateUnconfirmedError,
+} from "@/lib/notebooklm/studio";
 import { SourceAddAmbiguousError, SourceAddUnconfirmedError, SourceNotFoundError, SourceNotReadyError } from "@/lib/notebooklm/sources";
 import { CreateAmbiguousError, CreateNotAppliedError, InvalidCursorError, NotWritableError } from "@/lib/notebooklm/notebooks";
 import { RpcAuthError, RpcDriftError, RpcNoFramesError, RpcQuotaError, RpcStatusError } from "@/lib/rpc/errors";
@@ -85,11 +94,42 @@ export function toolError(e: unknown): ToolResult {
   if (e instanceof SourceAddAmbiguousError) {
     return fail("Adding the source gave an unclear answer and several sources could be the result. Call notebook_get to check before adding anything again.");
   }
+  if (e instanceof NotEnoughReadySourcesError) {
+    const { total, ready } = e.counts;
+    const why: Record<NotEnoughReadySourcesError["reason"], string> = {
+      no_sources: "The notebook has no sources yet. Add at least one with source_add_url, source_add_youtube, source_add_text or source_add_drive, wait until it is 'ready', then try again.",
+      none_ready: `None of the notebook's ${total} source(s) is ready yet. Call notebook_get again after 15 seconds or more and try once at least one source has status 'ready'.`,
+      selected_unknown: "One of the sourceIds is not in this notebook. Call notebook_get to see the source ids.",
+      selected_not_ready: `One of the chosen sources is not ready yet (${ready} of ${total} are). Call notebook_get again after 15 seconds or more, or leave sourceIds out to use all ready sources.`,
+    };
+    return fail(`Nothing was started. ${why[e.reason]}`);
+  }
+  if (e instanceof StudioCreateUnconfirmedError) {
+    return fail(
+      "Starting the overview did not give a clear answer and no new overview shows up in the notebook. Do NOT start another one right away: wait 15 seconds or more, call studio_status, and start again only if it is still missing.",
+    );
+  }
+  if (e instanceof StudioCreateAmbiguousError) {
+    return fail("Starting the overview gave an unclear answer and several new overviews could be the result. Call studio_status to check before starting anything again.");
+  }
+  if (e instanceof ArtifactNotFoundError) {
+    return fail("That artifact id was not found in this notebook. Call studio_status to see the overviews and their ids.");
+  }
+  if (e instanceof ArtifactNotReadyError) {
+    return fail(
+      e.status === "failed"
+        ? "That overview failed to generate, so there is nothing to download. Start a new one if needed (it counts against the daily limit)."
+        : `That overview is not ready yet (status: ${e.status}). Generation can take from a few minutes to over 30 minutes. Call studio_status again after the suggested wait (15 seconds or more) and ask for the link once it is 'ready' with readyMedia true.`,
+    );
+  }
+  if (e instanceof ArtifactNotDownloadableError) {
+    return fail("Only audio and video overviews can be downloaded. Use studio_status to find the right artifact id.");
+  }
   if (e instanceof StaleTokenMutationError) {
     return fail("The change was NOT confirmed (the session token was stale and has been refreshed). Check with notebooks_list or notebook_get whether it was applied, then retry only if it was not.");
   }
   if (e instanceof AmbiguousMutationError) {
-    return fail("The change may or may not have been applied. Do not retry yet: check with notebooks_list or notebook_get first.");
+    return fail("The change may or may not have been applied. Do not retry yet: check with notebooks_list, notebook_get or studio_status first.");
   }
   if (e instanceof AccountNeedsReauthError || e instanceof SignedOutError || e instanceof CookieMismatchError || e instanceof RotateAuthError || e instanceof RpcAuthError) {
     return fail(`This Google account's session has expired or been signed out. ${REIMPORT}`);
@@ -104,7 +144,7 @@ export function toolError(e: unknown): ToolResult {
     return fail("NotebookLM's response format has changed and the connector cannot read it safely. Do not retry; tell the owner the connector needs an update.");
   }
   if (e instanceof RpcQuotaError) {
-    return fail("NotebookLM says this account has hit a usage limit. Wait a while before trying again; the connector will not retry automatically.");
+    return fail("NotebookLM says this account has hit a usage limit (free accounts only get a few audio and video overviews per day). Wait a while before trying again; the connector will not retry automatically.");
   }
   if (e instanceof CooldownActiveError) {
     return fail(`This account is cooling down after a rate limit. Try again in about ${Math.max(1, Math.ceil(e.retryAfterMs / 1000))} seconds.`);
@@ -123,10 +163,15 @@ export function toolError(e: unknown): ToolResult {
   if (e instanceof JarError || e instanceof VaultCryptoError) {
     return fail(`The stored Google session for this account is incomplete or cannot be read. ${REIMPORT}`);
   }
-  if (e instanceof KeyringConfigError || e instanceof VaultConfigError || e instanceof CreatedObjectsConfigError || e instanceof RuntimeConfigError || e instanceof VaultStorageError) {
+  if (e instanceof ExpiredAuthError) {
+    return fail(
+      "Google refused to hand over the media file (the file link or the account's session has expired). Call studio_status to confirm the overview is still 'ready', then call studio_download_link again. If it keeps failing, ask the owner to re-import this account on the vault page.",
+    );
+  }
+  if (e instanceof MediaLinkConfigError || e instanceof KeyringConfigError || e instanceof VaultConfigError || e instanceof CreatedObjectsConfigError || e instanceof RuntimeConfigError || e instanceof VaultStorageError) {
     return fail("The connector's storage or keys are not set up correctly on the server. Tell the owner to check the deployment settings.");
   }
-  if (e instanceof HttpStatusError || e instanceof NetworkError || e instanceof ExpiredAuthError || e instanceof DisallowedHostError || e instanceof TooManyRedirectsError) {
+  if (e instanceof HttpStatusError || e instanceof NetworkError || e instanceof DisallowedHostError || e instanceof TooManyRedirectsError) {
     return fail("Could not reach NotebookLM or got an unusable reply. Wait a moment and try once more; if it keeps failing, tell the owner.");
   }
   // Unknown: log the class name only (messages of unknown errors might carry data), answer generically.

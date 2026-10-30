@@ -15,6 +15,18 @@ import {
   sourceYoutubeSchema,
   type AddedSource,
 } from "@/lib/notebooklm/sources";
+import { MEDIA_CONTENT_TYPE, DEFAULT_TTL_SECONDS } from "@/lib/notebooklm/media-link";
+import {
+  MAX_FOCUS_PROMPT_CHARS,
+  MAX_STYLE_PROMPT_CHARS,
+  NEXT_CHECK_SECONDS,
+  VIDEO_STYLE_RULE,
+  artifactIdSchema,
+  audioShape,
+  videoShape,
+  videoStyleRuleOk,
+  type CreatedOverview,
+} from "@/lib/notebooklm/studio";
 import { resolveAccount } from "./accounts";
 import { MAX_TEXT_RESULT_CHARS, ok, toolError, type ToolResult } from "./result";
 
@@ -293,6 +305,122 @@ export function createTools(getRuntime: () => ToolRuntime) {
       }),
   });
 
+
+  // --- Studio: audio and video overviews ---
+  const CREATE_WRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+  const STUDIO_TAIL =
+    ` Generation runs in the background and takes from a few minutes to over 30 minutes, so this call returns at once with an artifactId and never waits. Free Google accounts only get a few audio and video overviews per day, and this connector also keeps its own daily limit per account: if a limit is reached the call says so and nothing is started (it is never retried automatically). Only sources that are 'ready' are used; if the notebook has none, nothing is started. Next step: call studio_status (no more often than every ${NEXT_CHECK_SECONDS} seconds) until the overview is 'ready' with readyMedia true, then call studio_download_link. If the result says the outcome is unclear, call studio_status before starting another one. It adds one new overview to the notebook (nothing is changed or deleted).`;
+  const sourceIdsArg = audioShape.sourceIds.describe("Optional: only use these sources (ids from notebook_get; all must be 'ready'). Leave out to use every ready source.");
+  const languageArg = audioShape.language.describe("Language of the overview as a code such as 'en', 'it', 'de' or 'pt-BR'. Default 'en'.");
+  const focusArg = audioShape.focusPrompt.describe(`Optional: what the overview should focus on (at most ${MAX_FOCUS_PROMPT_CHARS} characters).`);
+  const createdResult = (acc: Account, notebookId: string, r: CreatedOverview) => ({
+    account: who(acc),
+    notebookId,
+    artifactId: r.artifactId,
+    type: r.type,
+    status: r.status,
+    sourcesUsed: r.sourceCount,
+    ...(r.reconciled ? { note: "The request had an unclear first answer; the new overview was found by re-reading the notebook, so nothing was created twice." } : {}),
+    nextCheckInSeconds: NEXT_CHECK_SECONDS,
+    next: `Call studio_status with this artifactId after ${NEXT_CHECK_SECONDS} seconds or more. Do not wait inside one call.`,
+  });
+
+  const studioAudioCreate = def({
+    name: "studio_audio_create",
+    title: "Start an audio overview",
+    description: `Start a NotebookLM audio overview (a spoken, podcast-style conversation about the notebook's sources) in a notebook.${STUDIO_TAIL}`,
+    inputSchema: z.object({
+      account: accountArg,
+      notebookId: notebookIdArg,
+      format: audioShape.format.describe("deep_dive (default, in-depth discussion), brief (short summary), critique (constructive review) or debate (two sides)."),
+      length: audioShape.length.describe("short, default or long."),
+      language: languageArg,
+      focusPrompt: focusArg,
+      sourceIds: sourceIdsArg,
+    }),
+    annotations: CREATE_WRITE,
+    run: ({ account, notebookId, ...opts }) =>
+      withAccount(account, async (rt, acc) => createdResult(acc, notebookId, await rt.studio.createAudioOverview(acc.id, notebookId, opts))),
+  });
+
+  const studioVideoCreate = def({
+    name: "studio_video_create",
+    title: "Start a video overview",
+    description: `Start a NotebookLM video overview (a narrated video with slides and visuals about the notebook's sources) in a notebook.${STUDIO_TAIL}`,
+    inputSchema: z
+      .object({
+        account: accountArg,
+        notebookId: notebookIdArg,
+        format: videoShape.format.describe("explainer (default, thorough) or brief (short)."),
+        style: videoShape.style.describe("Visual style: auto (default), classic, whiteboard, heritage, paper_craft, watercolor, anime, retro_print, kawaii, or custom (then stylePrompt is required)."),
+        stylePrompt: videoShape.stylePrompt.describe(`Only with style 'custom': describe the look in your own words (at most ${MAX_STYLE_PROMPT_CHARS} characters).`),
+        language: languageArg,
+        focusPrompt: focusArg,
+        sourceIds: sourceIdsArg,
+      })
+      .refine(videoStyleRuleOk, VIDEO_STYLE_RULE),
+    annotations: CREATE_WRITE,
+    run: ({ account, notebookId, ...opts }) =>
+      withAccount(account, async (rt, acc) => createdResult(acc, notebookId, await rt.studio.createVideoOverview(acc.id, notebookId, opts))),
+  });
+
+  const studioStatus = def({
+    name: "studio_status",
+    title: "Check audio and video overview status",
+    description: `Check the audio and video overviews of a notebook. Returns up to 20 rows, newest first: artifactId, type (audio, video or other), title, status (queued, generating, ready or failed), readyMedia (true when the file can be downloaded) and createdAt. Pass artifactId to check one overview. Generation takes a few minutes to over 30 minutes: poll no more often than nextCheckInSeconds (at least ${NEXT_CHECK_SECONDS}), never in a tight loop. When status is 'ready' and readyMedia is true, call studio_download_link. A 'failed' overview is not retried by this connector.`,
+    inputSchema: z.object({
+      account: accountArg,
+      notebookId: notebookIdArg,
+      artifactId: artifactIdSchema.optional().describe("Optional: only this overview (artifactId from studio_audio_create / studio_video_create)."),
+      type: z.enum(["audio", "video"]).optional().describe("Optional: only audio or only video overviews."),
+    }),
+    annotations: READ_GOOGLE,
+    run: ({ account, notebookId, artifactId, type }) =>
+      withAccount(account, async (rt, acc) => {
+        const r = await rt.studio.getStudioStatus(acc.id, notebookId, { artifactId, type });
+        return {
+          account: who(acc),
+          notebookId,
+          artifacts: r.artifacts,
+          total: r.total,
+          nextCheckInSeconds: r.nextCheckInSeconds,
+          note:
+            r.nextCheckInSeconds > 0
+              ? `Something is still generating. Check again in ${r.nextCheckInSeconds} seconds or more, not sooner.`
+              : "Nothing is generating right now.",
+        };
+      }),
+  });
+
+  const studioDownloadLink = def({
+    name: "studio_download_link",
+    title: "Get a download link for an overview",
+    description:
+      "Get a short-lived link to play or save a finished audio (m4a) or video (mp4) overview. Only works when studio_status shows the overview as 'ready' with readyMedia true. The link is on this connector's own domain, opens in any browser (including a phone), expires after 15 minutes by default (up to 60), and anyone who has the link can download that one file until it expires, so give it only to the user. Ask for a new link if it expires.",
+    inputSchema: z.object({
+      account: accountArg,
+      notebookId: notebookIdArg,
+      artifactId: artifactIdSchema.describe("artifactId of a ready audio or video overview (from studio_status)."),
+      expiresInMinutes: z.number().int().min(1).max(60).optional().describe(`Minutes the link stays valid (default ${DEFAULT_TTL_SECONDS / 60}, max 60).`),
+    }),
+    annotations: READ_GOOGLE,
+    run: ({ account, notebookId, artifactId, expiresInMinutes }) =>
+      withAccount(account, async (rt, acc) => {
+        const target = await rt.studio.getMedia(acc.id, notebookId, artifactId); // re-checks ready + media; the Google URL stays server side
+        const link = rt.links.create({ accountId: acc.id, notebookId, artifactId: target.artifactId, kind: target.kind, ttlSeconds: expiresInMinutes === undefined ? undefined : expiresInMinutes * 60 });
+        return {
+          account: who(acc),
+          notebookId,
+          artifactId: target.artifactId,
+          type: target.kind,
+          title: target.title,
+          url: link.url,
+          expiresAt: link.expiresAt.toISOString(),
+          contentType: MEDIA_CONTENT_TYPE[target.kind],
+          note: "Give this link to the user to open, play or save. It stops working at expiresAt; ask again for a fresh one.",
+        };
+      }),
+  });
   return {
     accountsList,
     notebooksList,
@@ -306,6 +434,10 @@ export function createTools(getRuntime: () => ToolRuntime) {
     sourceAddDrive,
     sourceGetText,
     sourceGetGuide,
+    studioAudioCreate,
+    studioVideoCreate,
+    studioStatus,
+    studioDownloadLink,
   };
 }
 
@@ -337,5 +469,9 @@ export function registerTools(server: McpServerT, getRuntime: () => ToolRuntime)
   register(server, t.sourceAddDrive);
   register(server, t.sourceGetText);
   register(server, t.sourceGetGuide);
+  register(server, t.studioAudioCreate);
+  register(server, t.studioVideoCreate);
+  register(server, t.studioStatus);
+  register(server, t.studioDownloadLink);
 }
 

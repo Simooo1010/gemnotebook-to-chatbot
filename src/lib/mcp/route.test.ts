@@ -6,7 +6,9 @@ import { createMemoryStore } from "@/lib/oauth/store";
 import { defaultRandom } from "@/lib/oauth/crypto";
 import type { NotebookOps } from "@/lib/notebooklm/notebooks";
 import type { SourceOps } from "@/lib/notebooklm/sources";
-import type { ToolRuntime } from "@/lib/runtime";
+import type { MediaDownloader } from "@/lib/notebooklm/media-download";
+import type { StudioOps } from "@/lib/notebooklm/studio";
+import type { MediaLinks, ToolRuntime } from "@/lib/runtime";
 import { PROTECTED_RESOURCE_PATH, createMcpRoute } from "./route";
 
 const BASE = "https://connector.example.com";
@@ -31,6 +33,9 @@ async function setup(opts: { runtime?: () => ToolRuntime; oauth?: () => OAuthDep
       listAccounts: async () => [{ id: "a1", label: "Main", emailHash: null, status: "active", createdAt: new Date(0) }],
       notebooks: {} as NotebookOps,
       sources: {} as SourceOps,
+      studio: {} as StudioOps,
+      links: {} as MediaLinks,
+      media: {} as MediaDownloader,
     };
   const route = createMcpRoute({ env: opts.env ?? { PUBLIC_BASE_URL: BASE }, oauth: opts.oauth ?? (() => deps), runtime: () => runtime });
   return { route, deps, store };
@@ -135,7 +140,7 @@ describe("/api/mcp with a valid token", () => {
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
-  it("tools/list returns the notebook and source tools with annotations and schemas", async () => {
+  it("tools/list returns the notebook, source and studio tools with annotations and schemas", async () => {
     const { route } = await setup();
     const res = await route.handle(post(rpc("tools/list", {}, 2), GOOD, { "MCP-Protocol-Version": "2025-06-18" }));
     expect(res.status).toBe(200);
@@ -155,6 +160,10 @@ describe("/api/mcp with a valid token", () => {
         "source_add_youtube",
         "source_get_guide",
         "source_get_text",
+        "studio_audio_create",
+        "studio_download_link",
+        "studio_status",
+        "studio_video_create",
       ].sort(),
     );
     for (const t of tools) {
@@ -166,6 +175,10 @@ describe("/api/mcp with a valid token", () => {
     expect(tools.find((t) => t.name === "notebook_create")!.annotations.readOnlyHint).toBe(false);
     expect(tools.find((t) => t.name === "source_add_url")!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
     expect(tools.find((t) => t.name === "source_get_text")!.annotations.readOnlyHint).toBe(true);
+    for (const n of ["studio_audio_create", "studio_video_create"]) {
+      expect(tools.find((t) => t.name === n)!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
+    }
+    for (const n of ["studio_status", "studio_download_link"]) expect(tools.find((t) => t.name === n)!.annotations.readOnlyHint).toBe(true);
   });
 
   it("tools/call accounts_list runs through the fake runtime", async () => {

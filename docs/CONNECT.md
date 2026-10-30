@@ -1,6 +1,6 @@
 # Connect Claude to your notebooks
 
-Status: Step 4 code is complete but **not yet verified against a real claude.ai connector** (needs a deploy with the owner's environment variables first, see `SETUP-FOR-OWNER.md`).
+Status: Steps 4 to 6 code is complete but **not yet verified against a real claude.ai connector or a real Google account** (needs a deploy with the owner's environment variables first, see `SETUP-FOR-OWNER.md`).
 
 ## The MCP URL
 
@@ -23,7 +23,20 @@ If the connector says it needs to reconnect, repeat step 3. Access tokens last 1
 
 ## What Claude can do in this step
 
-`accounts_list`, `notebooks_list`, `notebook_create`, `notebook_rename` (only notebooks this connector created), `notebook_get` (with sources), `notebook_summary`. Sources, chat and audio/video overviews come in later steps. Nothing can be deleted.
+`accounts_list`, `notebooks_list`, `notebook_create`, `notebook_rename` (only notebooks this connector created), `notebook_get` (with sources), `notebook_summary`. Nothing can be deleted.
+
+## Audio and video overviews (Step 6)
+
+Tools: `studio_audio_create`, `studio_video_create`, `studio_status`, `studio_download_link`. In plain words:
+
+1. Make sure the notebook has at least one source that is **ready** (Claude checks this and tells you if not; sources still importing are skipped).
+2. Ask Claude, for example, "make a brief audio overview of this notebook, in Italian" or "make a whiteboard-style video explainer". Audio can be a deep dive, brief, critique or debate, short, default or long. Video can be an explainer or brief, in one of the styles (auto, classic, whiteboard, heritage, paper craft, watercolor, anime, retro print, kawaii) or your own custom style description. Claude answers at once with an id: it does **not** wait.
+3. Google builds it in the background. That takes a few minutes, sometimes more than 30. Claude checks with `studio_status` no more often than about every 15 seconds. Status goes queued, then generating, then ready (a file is ready only when `readyMedia` is true), or failed.
+4. When it is ready, ask for the link. `studio_download_link` returns an address on this connector's own domain that is valid for 15 minutes by default (up to 60). Open it on your phone or computer to play or save the file (audio is .m4a, video is .mp4). Anyone who has the link can download that one file until it expires, so do not share it; ask Claude for a new one when it runs out. Video seeking on iPhone Safari relies on byte ranges, which the link supports.
+
+Limits: free Google accounts only get a few audio and video overviews per day. This connector also keeps its own daily limit per account (default 2 audio and 2 video per UTC day). When a limit is reached nothing is started and nothing is retried; try again tomorrow. A failed overview is not retried either (starting a new one counts again). If a start request gives an unclear answer, Claude checks `studio_status` before starting another one, so you do not get duplicates.
+
+The link needs `PUBLIC_BASE_URL` and `OAUTH_SIGNING_KEY` to be set on the server (see `SETUP-FOR-OWNER.md`). The media address never contains Google cookies or Google file addresses.
 
 ## Revoke access
 
