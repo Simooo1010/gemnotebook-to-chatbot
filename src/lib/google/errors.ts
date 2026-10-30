@@ -87,6 +87,14 @@ export class AmbiguousMutationError extends GoogleTransportError {
   }
 }
 
+/** A mutation was rejected as unauthenticated, but the session is still alive (stale page token). The write was NOT confirmed. */
+export class StaleTokenMutationError extends AmbiguousMutationError {
+  constructor(rpcId: string) {
+    super(rpcId, "auth rejected with a stale token; session is still valid");
+    this.message = `mutation ${rpcId} was NOT confirmed: the page token was stale and has been refreshed. List first to check whether it was applied, then retry if it was not.`;
+  }
+}
+
 export class HttpStatusError extends GoogleTransportError {
   override readonly kind = "http_status";
   constructor(readonly rpcId: string, readonly status: number) {

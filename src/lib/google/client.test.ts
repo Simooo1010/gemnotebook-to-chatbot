@@ -104,10 +104,31 @@ describe("google client", () => {
     expect(s.calls).toHaveLength(5);
   });
 
-  it("mutation: auth failure is never retried", async () => {
-    const s = await setup([rotateOk, home, () => res(401)]);
+  it("mutation: auth failure + signed-out probe → needs_reauth, write never retried", async () => {
+    const s = await setup([rotateOk, home, () => res(401), () => res(302, { location: "https://accounts.google.com/ServiceLogin" }), () => res(200, { body: "x" })]);
     await expect(s.client.rpc(mutate(s.id))).rejects.toBeInstanceOf(AccountNeedsReauthError);
-    expect(s.calls).toHaveLength(3);
+    expect(s.calls).toHaveLength(5);
+    expect(s.calls.filter((c) => c.url.includes("batchexecute"))).toHaveLength(1);
+    expect((await s.accounts.get(s.id))!.status).toBe("needs_reauth");
+  });
+
+  it("mutation: auth failure + cookie mismatch probe → needs_reauth", async () => {
+    const s = await setup([rotateOk, home, () => res(401), () => res(302, { location: "https://accounts.google.com/CookieMismatch" }), () => res(200, { body: "x" })]);
+    await expect(s.client.rpc(mutate(s.id))).rejects.toBeInstanceOf(AccountNeedsReauthError);
+    expect((await s.accounts.get(s.id))!.status).toBe("needs_reauth");
+  });
+
+  it("mutation: auth failure but session alive (stale token) → not confirmed, account stays active, tokens refreshed", async () => {
+    const s = await setup([rotateOk, home, () => res(401), home, () => res(200, { body: batchBody(LIST, [1]) })]);
+    const e = (await s.client.rpc(mutate(s.id)).catch((x: unknown) => x)) as Error;
+    expect(e).toBeInstanceOf(AmbiguousMutationError);
+    expect(e.message).toMatch(/NOT confirmed/);
+    expect((await s.accounts.get(s.id))!.status).toBe("active");
+    expect(s.calls.filter((c) => c.url.includes("batchexecute"))).toHaveLength(1); // not retried
+    expect(s.audit[0]!.outcome).toBe("error:ambiguous_mutation");
+    // token cache was refreshed: the next call only POSTs
+    await s.client.rpc(read(s.id));
+    expect(s.calls).toHaveLength(5);
   });
 
   it("mutation: 5xx, code 3 and network errors are ambiguous and not retried", async () => {

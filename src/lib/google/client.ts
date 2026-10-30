@@ -12,6 +12,7 @@ import {
   NetworkError,
   RotateAuthError,
   SignedOutError,
+  StaleTokenMutationError,
 } from "./errors";
 import { browserHeaders, fetchWithJar, type FetchLike } from "./http";
 import { rotateCookies, createRotationLimiter, type RotationLimiter } from "./keepalive";
@@ -183,7 +184,19 @@ export function createGoogleClient(deps: GoogleClientDeps) {
         return r.result;
       } catch (e) {
         if (!(e instanceof RpcAuthError)) throw e;
-        if (call.kind === "mutate") return await markReauth(call.accountId);
+        if (call.kind === "mutate") {
+          // Never retry a write. First find out (with a read) whether the session is really dead.
+          cache.invalidate(call.accountId);
+          try {
+            const r = await fetchPageTokens({ fetch: deps.fetch, jar, base, authuser: deps.config.authuser, now });
+            cache.set(call.accountId, r.tokens);
+            jar = r.jar;
+          } catch (pe) {
+            if (pe instanceof SignedOutError || pe instanceof CookieMismatchError) return await markReauth(call.accountId);
+            throw pe;
+          }
+          throw new StaleTokenMutationError(rpcId);
+        }
         // Reads: refresh tokens once and retry once (PROTOCOL §1.4).
         cache.invalidate(call.accountId);
         ({ tokens, jar } = await freshTokens(call.accountId, jar));
