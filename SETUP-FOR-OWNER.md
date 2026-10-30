@@ -10,7 +10,7 @@ Status: 0 of 9 done.
 ## Secrets (environment variables)
 Never paste secret values into chat. Claude generates the random ones and tells you only the variable names.
 - [ ] Vercel → Settings → Environment Variables (Preview + Production): `VAULT_ENCRYPTION_KEY` — random 32-byte key for the cookie vault.
-- [ ] Vercel env: `OWNER_PASSPHRASE_HASH` — hash of the passphrase that protects the login/vault page and the connector approval screen.
+- [ ] Vercel env: `OWNER_PASSPHRASE` (choose any long passphrase; set as a Sensitive variable) — protects the login/vault page and the connector approval screen.
 - [ ] Vercel env: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` — server side only.
 - [ ] Claude cloud environment (only for the real-data run, gate 2): a Google session for a test account, imported through the vault page, never pasted in chat.
 

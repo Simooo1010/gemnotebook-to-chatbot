@@ -94,3 +94,4 @@ Each step is shippable and testable alone, ordered by the critical path (budget 
 | 2026-10-30 | Import by pasted cookie JSON, not a bookmarklet (HttpOnly cookies); extension optional in Step 8 | Simooo1010 | 3 |
 | 2026-10-30 | Vercel-IP go/no-go in Step 3; if gated, build continues on unaffected work and Claude stops to report options (Plan B = owner-hosted worker) | Simooo1010 | 4 |
 | 2026-10-30 | Spec v1 approved; autonomous run Steps 1–8 authorised | Simooo1010 | all |
+| 2026-10-30 | Owner passphrase may be supplied as plain env OWNER_PASSPHRASE (compared in constant time) or as scrypt OWNER_PASSPHRASE_HASH; Claude-proposed, owner-informed | Claude, informed to Simooo1010 | 3 |
