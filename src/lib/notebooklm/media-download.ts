@@ -3,6 +3,7 @@
 //    (manual redirects, cookies re-attached per hop, Google hosts only). The Google URL is never stored or returned.
 //  - handleMediaRequest: the GET /api/media/<token> logic with injected deps. Every failure before the first byte is a generic
 //    answer: no Google URL, cookie, account id or reason detail ever reaches the client or the logs.
+import { createHash } from "node:crypto";
 import type { AuditSink, ClientVault } from "@/lib/google/client";
 import {
   CooldownActiveError,
@@ -25,6 +26,54 @@ export interface OpenedMedia {
   acceptRanges: string | null;
 }
 
+export const URL_MEMO_TTL_MS = 60_000;
+export const URL_MEMO_MAX_ENTRIES = 50;
+
+export interface UrlMemo<V> {
+  get(key: string): V | undefined;
+  set(key: string, value: V): void;
+  delete(key: string): void;
+  readonly size: number;
+}
+
+/**
+ * Tiny in-process memo (TTL + size cap) for the resolved fresh media target, so repeated Range requests (Safari) do not each
+ * re-list the notebook. Lives in process memory only, never persisted or logged. Expired entries are purged on every access, and an
+ * entry is never returned after its TTL. At the cap the oldest entry is evicted.
+ */
+export function createUrlMemo<V>(opts: { now?: () => number; ttlMs?: number; maxEntries?: number } = {}): UrlMemo<V> {
+  const now = opts.now ?? Date.now;
+  const ttl = opts.ttlMs ?? URL_MEMO_TTL_MS;
+  const max = opts.maxEntries ?? URL_MEMO_MAX_ENTRIES;
+  const entries = new Map<string, { value: V; expiresAt: number }>(); // insertion order = age order (set re-inserts)
+  const purge = () => {
+    const t = now();
+    for (const [k, e] of entries) if (e.expiresAt <= t) entries.delete(k);
+  };
+  return {
+    get(key) {
+      purge();
+      return entries.get(key)?.value;
+    },
+    set(key, value) {
+      purge();
+      entries.delete(key);
+      while (entries.size >= max) entries.delete(entries.keys().next().value as string);
+      entries.set(key, { value, expiresAt: now() + ttl });
+    },
+    delete(key) {
+      entries.delete(key);
+    },
+    get size() {
+      purge();
+      return entries.size;
+    },
+  };
+}
+
+/** Memo key for a download token: the hash only, never the token itself. */
+export const memoKeyForToken = (token: string): string => createHash("sha256").update(token, "utf8").digest("hex");
+
 export interface MediaDownloaderDeps {
   studio: Pick<StudioOps, "getMedia">;
   vault: ClientVault;
@@ -32,6 +81,8 @@ export interface MediaDownloaderDeps {
   fetch: FetchLike;
   audit: AuditSink;
   now?: () => number;
+  /** Optional memo of the fresh media target (production wiring passes one). Without it every request re-lists. */
+  urlMemo?: UrlMemo<{ url: string; kind: MediaKind }>;
 }
 
 /** Only a single byte range is forwarded; anything else is ignored (the whole file is served), as RFC 9110 allows. */
@@ -49,12 +100,18 @@ function outcomeOf(e: unknown): string {
 export function createMediaDownloader(deps: MediaDownloaderDeps) {
   const now = deps.now ?? Date.now;
 
-  async function open(claims: MediaClaims, opts: { range?: string; signal?: AbortSignal } = {}): Promise<OpenedMedia> {
+  async function open(claims: MediaClaims, opts: { range?: string; signal?: AbortSignal; memoKey?: string } = {}): Promise<OpenedMedia> {
     let outcome = "ok";
     try {
       // Fresh URL every time. This read also refreshes the stored cookie jar if Google rotated it, so load the jar after it.
-      const target = await deps.studio.getMedia(claims.accountId, claims.notebookId, claims.artifactId, "media_download");
-      if (target.kind !== claims.kind) throw new ArtifactNotFoundError();
+      // A memo hit skips only the notebook re-list; the account is still checked below (getJar fails for a disabled account).
+      let target = opts.memoKey ? deps.urlMemo?.get(opts.memoKey) : undefined;
+      if (!target) {
+        const fresh = await deps.studio.getMedia(claims.accountId, claims.notebookId, claims.artifactId, "media_download");
+        target = { url: fresh.url, kind: fresh.kind };
+        if (target.kind !== claims.kind) throw new ArtifactNotFoundError();
+        if (opts.memoKey) deps.urlMemo?.set(opts.memoKey, target);
+      }
       const jar = await deps.vault.getJar(claims.accountId);
       const m = await deps.throttle.schedule(claims.accountId, () =>
         fetchMedia(deps.fetch, jar, target.url, { range: opts.range, signal: opts.signal, now }),
@@ -63,6 +120,7 @@ export function createMediaDownloader(deps: MediaDownloaderDeps) {
       return { status: m.status, body: m.body, kind: target.kind, contentLength: m.contentLength, contentRange: m.contentRange, acceptRanges: m.acceptRanges };
     } catch (e) {
       outcome = outcomeOf(e);
+      if (opts.memoKey) deps.urlMemo?.delete(opts.memoKey); // a failure may mean the URL went stale: next request re-lists
       throw e;
     } finally {
       await deps.audit.write({ accountId: claims.accountId, tool: "media_download", rpcId: "media", outcome, at: new Date(now()) }).catch(() => undefined);
@@ -109,7 +167,7 @@ export async function handleMediaRequest(request: Request, token: string, d: Med
 
   let m: OpenedMedia;
   try {
-    m = await downloader.open(claims, { range: sanitizeRange(request.headers.get("range")), signal: request.signal });
+    m = await downloader.open(claims, { range: sanitizeRange(request.headers.get("range")), signal: request.signal, memoKey: memoKeyForToken(token) });
   } catch (e) {
     if (e instanceof VaultError) return notFound(); // disabled, wiped or unknown account
     if (e instanceof ArtifactNotFoundError || e instanceof ArtifactNotReadyError || e instanceof ArtifactNotDownloadableError) return notFound();

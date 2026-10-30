@@ -8,7 +8,7 @@ import { MemoryUsageCounter, createThrottle, type Throttle, type UsageCounter } 
 import { createChatOps, type ChatOps } from "@/lib/notebooklm/chat";
 import { getCreatedObjects, type CreatedObjects } from "@/lib/notebooklm/created";
 import { createNotebookOps, type NotebookOps } from "@/lib/notebooklm/notebooks";
-import { createMediaDownloader, type MediaDownloader } from "@/lib/notebooklm/media-download";
+import { createMediaDownloader, createUrlMemo, type MediaDownloader } from "@/lib/notebooklm/media-download";
 import { deriveMediaKey, mediaUrl, signMediaToken, type MediaKind } from "@/lib/notebooklm/media-link";
 import { createSourceOps, type SourceOps } from "@/lib/notebooklm/sources";
 import { createStudioOps, type StudioOps } from "@/lib/notebooklm/studio";
@@ -132,7 +132,7 @@ export function createRuntime(p: RuntimeParts): CronRuntime {
   const sources = createSourceOps({ client, created: p.created, notebooks, rpcOverridesJson, now: p.now });
   const studio = createStudioOps({ client, created: p.created, notebooks, rpcOverridesJson, now: p.now });
   const chat = createChatOps({ client, notebooks, rpcOverridesJson });
-  const media = createMediaDownloader({ studio, vault: p.vault, throttle, fetch: fetchImpl, audit: p.audit, now: p.now });
+  const media = createMediaDownloader({ studio, vault: p.vault, throttle, fetch: fetchImpl, audit: p.audit, now: p.now, urlMemo: createUrlMemo({ now: p.now }) });
   const links: MediaLinks = {
     create(a) {
       const base = resolvePublicBaseUrl(p.env);

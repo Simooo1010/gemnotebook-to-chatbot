@@ -5,7 +5,7 @@ import { SYN_SID, fakeClock, res, scriptedFetch, synthJar, type Handler } from "
 import { createThrottle } from "@/lib/google/throttle";
 import type { CookieJar } from "@/lib/vault/jar";
 import { VaultError } from "@/lib/vault/vault";
-import { createMediaDownloader, handleMediaRequest, sanitizeRange } from "./media-download";
+import { URL_MEMO_MAX_ENTRIES, URL_MEMO_TTL_MS, createMediaDownloader, createUrlMemo, handleMediaRequest, memoKeyForToken, sanitizeRange } from "./media-download";
 import { deriveMediaKey, signMediaToken, type MediaClaims, type MediaKind } from "./media-link";
 import { ArtifactNotFoundError, ArtifactNotReadyError, type MediaTarget } from "./studio";
 
@@ -24,6 +24,7 @@ interface Opts {
   target?: MediaTarget | Error;
   jar?: CookieJar | Error;
   handlers: Handler[];
+  memo?: boolean;
 }
 function setup(o: Opts) {
   const clock = fakeClock(NOW);
@@ -33,13 +34,14 @@ function setup(o: Opts) {
     if (o.target instanceof Error) throw o.target;
     return o.target ?? { artifactId: "art-1", kind: "audio" as MediaKind, title: "T", url: SIGNED_URL, mime: "audio/mp4" };
   });
+  const state: { jar?: CookieJar | Error } = { jar: o.jar };
   const updateJar = vi.fn(async () => undefined);
   const downloader = createMediaDownloader({
     studio: { getMedia },
     vault: {
       getJar: async () => {
-        if (o.jar instanceof Error) throw o.jar;
-        return o.jar ?? jarWith();
+        if (state.jar instanceof Error) throw state.jar;
+        return state.jar ?? jarWith();
       },
       updateJar,
     },
@@ -47,10 +49,11 @@ function setup(o: Opts) {
     fetch,
     audit,
     now: clock.now,
+    urlMemo: o.memo ? createUrlMemo({ now: clock.now }) : undefined,
   });
   const call = (token: string, init: RequestInit = {}) =>
     handleMediaRequest(new Request(`https://connector.example.com/api/media/${token}`, init), token, { key: () => key, downloader: () => downloader, now: clock.now });
-  return { call, calls, audit, getMedia, updateJar };
+  return { call, calls, audit, getMedia, updateJar, clock, state };
 }
 const get = (h: Record<string, string> = {}): RequestInit => ({ method: "GET", headers: h });
 
@@ -292,5 +295,100 @@ describe("GET /api/media/<token>: streaming", () => {
     expect(r.status).toBe(200);
     expectNoLeak(await dump(new Response(null, { status: r.status, headers: r.headers })));
     await r.arrayBuffer().catch(() => undefined);
+  });
+});
+
+describe("url memo", () => {
+  it("hit, expiry at the TTL, and delete", () => {
+    let t = 0;
+    const m = createUrlMemo<string>({ now: () => t });
+    m.set("a", "A");
+    expect(m.get("a")).toBe("A");
+    t = URL_MEMO_TTL_MS - 1;
+    expect(m.get("a")).toBe("A");
+    t = URL_MEMO_TTL_MS;
+    expect(m.get("a")).toBeUndefined();
+    expect(m.size).toBe(0); // purged, not kept around
+    m.set("b", "B");
+    m.delete("b");
+    expect(m.get("b")).toBeUndefined();
+  });
+
+  it("caps at 50 entries, evicting the oldest; expired entries are purged first", () => {
+    let t = 0;
+    const m = createUrlMemo<number>({ now: () => t });
+    for (let i = 0; i < URL_MEMO_MAX_ENTRIES + 5; i++) m.set(`k${i}`, i);
+    expect(m.size).toBe(URL_MEMO_MAX_ENTRIES);
+    expect(m.get("k0")).toBeUndefined();
+    expect(m.get("k4")).toBeUndefined();
+    expect(m.get("k5")).toBe(5);
+    expect(m.get(`k${URL_MEMO_MAX_ENTRIES + 4}`)).toBe(URL_MEMO_MAX_ENTRIES + 4);
+    t += URL_MEMO_TTL_MS + 1;
+    m.set("fresh", 1);
+    expect(m.size).toBe(1);
+  });
+
+  it("re-setting a key refreshes its TTL and position", () => {
+    let t = 0;
+    const m = createUrlMemo<number>({ now: () => t, maxEntries: 2 });
+    m.set("a", 1);
+    m.set("b", 2);
+    t = 30_000;
+    m.set("a", 3);
+    m.set("c", 4); // evicts b (oldest), not a
+    expect(m.get("a")).toBe(3);
+    expect(m.get("b")).toBeUndefined();
+  });
+
+  it("memo keys are token hashes, not tokens", () => {
+    const k = memoKeyForToken("tok.en");
+    expect(k).toMatch(/^[0-9a-f]{64}$/);
+    expect(k).not.toContain("tok");
+  });
+});
+
+describe("GET /api/media/<token> with the url memo", () => {
+  const ok = () => res(206, { body: bytes(10) as unknown as string, headers: { "content-type": "audio/mp4", "content-length": "10", "content-range": "bytes 0-9/100", "accept-ranges": "bytes" } });
+
+  it("repeated Range requests with the same token re-list the notebook once, but still fetch with the jar each time", async () => {
+    const s = setup({ memo: true, handlers: [ok, ok, ok] });
+    const t = tokenFor();
+    for (const r of ["bytes=0-9", "bytes=10-19", "bytes=20-29"]) {
+      const res1 = await s.call(t, get({ range: r }));
+      expect(res1.status).toBe(206);
+      await res1.arrayBuffer();
+    }
+    expect(s.getMedia).toHaveBeenCalledTimes(1);
+    expect(s.calls).toHaveLength(3);
+    expect(s.calls.every((c) => c.url === SIGNED_URL)).toBe(true);
+  });
+
+  it("after 60 s the URL is looked up again; a different token has its own entry", async () => {
+    const s = setup({ memo: true, handlers: [ok, ok, ok] });
+    const t = tokenFor();
+    await (await s.call(t, get())).arrayBuffer();
+    s.clock.advance(URL_MEMO_TTL_MS + 1);
+    await (await s.call(t, get())).arrayBuffer();
+    expect(s.getMedia).toHaveBeenCalledTimes(2);
+    await (await s.call(tokenFor(CLAIMS, 600), get())).arrayBuffer();
+    expect(s.getMedia).toHaveBeenCalledTimes(3);
+  });
+
+  it("a failed fetch drops the memo entry so the next request looks up a fresh URL", async () => {
+    const s = setup({ memo: true, handlers: [() => res(200, { body: "<html>sign in</html>", headers: { "content-type": "text/html" } }), ok] });
+    const t = tokenFor();
+    expect((await s.call(t, get())).status).toBe(502);
+    expect((await s.call(t, get())).status).toBe(206);
+    expect(s.getMedia).toHaveBeenCalledTimes(2);
+  });
+
+  it("a memo hit does not bypass the account check (disabled account -> generic 404)", async () => {
+    const s = setup({ memo: true, handlers: [ok] });
+    const t = tokenFor();
+    await (await s.call(t, get())).arrayBuffer();
+    s.state.jar = new VaultError("not_active"); // account killed within the memo TTL
+    expect((await s.call(t, get())).status).toBe(404);
+    expect(s.getMedia).toHaveBeenCalledTimes(1); // served from the memo, yet refused
+    expect(s.calls).toHaveLength(1); // no second Google request
   });
 });
