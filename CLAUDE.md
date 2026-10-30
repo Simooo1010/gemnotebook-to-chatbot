@@ -40,6 +40,14 @@ src/app/layout.tsx        root layout, inline light/dark CSS, no external fonts
 src/app/page.tsx          home: "service is running"
 src/app/api/health/       GET /api/health
 src/lib/health.ts         pure health-report builder (+ health.test.ts)
+src/lib/vault/            crypto (AES-GCM), cookie jar, storage ports, memory + Supabase adapters (supabase.ts, server only), vault service, getVault() factory in index.ts (+ tests)
+src/lib/auth/passphrase.ts owner passphrase verify + login limiter (+ test)
+src/lib/auth/session.ts   owner session cookie (HMAC, 12 h) + same-origin check (+ test)
+src/lib/owner/            request handlers for login/logout/vault API with injected deps (+ test); deps.ts = production wiring
+src/app/api/owner/        POST login, POST logout
+src/app/api/vault/        accounts (GET list, POST import), accounts/[id]/kill, revoke-all
+src/app/login, src/app/vault  owner login page and vault page (+ small client forms)
+supabase/                 migrations (0001_vault.sql, applied in the final manual run) + README
 ```
 
 ## Commands
