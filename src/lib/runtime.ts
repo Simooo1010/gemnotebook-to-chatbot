@@ -3,7 +3,8 @@
 import { createGoogleClient, type AuditSink } from "@/lib/google/client";
 import type { FetchLike } from "@/lib/google/http";
 import { MemoryAuditSink, SupabaseAuditSink, SupabaseUsageCounter } from "@/lib/google/supabase";
-import { MemoryUsageCounter, createThrottle, type UsageCounter } from "@/lib/google/throttle";
+import { createRotationLimiter, type RotationLimiter } from "@/lib/google/keepalive";
+import { MemoryUsageCounter, createThrottle, type Throttle, type UsageCounter } from "@/lib/google/throttle";
 import { createChatOps, type ChatOps } from "@/lib/notebooklm/chat";
 import { getCreatedObjects, type CreatedObjects } from "@/lib/notebooklm/created";
 import { createNotebookOps, type NotebookOps } from "@/lib/notebooklm/notebooks";
@@ -35,6 +36,14 @@ export interface ToolRuntime {
   links: MediaLinks;
   /** Used by GET /api/media/<token>. */
   media: MediaDownloader;
+}
+
+/** What the cron/health routes need on top of the tools: the same vault, throttle, rotation limiter and fetch as the live tools. */
+export interface CronRuntime extends ToolRuntime {
+  vault: Vault;
+  throttle: Throttle;
+  rotationLimiter: RotationLimiter;
+  fetch: FetchLike;
 }
 
 export interface MediaLinks {
@@ -104,11 +113,13 @@ export interface RuntimeParts {
 }
 
 /** Pure composition from already-built parts (no globals, no env reads beyond the Google settings). */
-export function createRuntime(p: RuntimeParts): ToolRuntime {
+export function createRuntime(p: RuntimeParts): CronRuntime {
   const rpcOverridesJson = has(p.env.NOTEBOOKLM_RPC_OVERRIDES) ? p.env.NOTEBOOKLM_RPC_OVERRIDES! : null;
   const fetchImpl: FetchLike = p.fetch ?? ((url, init) => fetch(url, init));
   const throttle = createThrottle({ usage: p.usage, now: p.now, sleep: p.sleep });
+  const rotationLimiter = createRotationLimiter({ now: p.now });
   const client = createGoogleClient({
+    rotationLimiter,
     fetch: fetchImpl,
     vault: p.vault,
     accounts: { setStatus: (id, status) => (status === "needs_reauth" ? p.vault.markNeedsReauth(id) : Promise.resolve()) },
@@ -133,13 +144,13 @@ export function createRuntime(p: RuntimeParts): ToolRuntime {
       return { url: mediaUrl(base, token), expiresAt: new Date(expiresAt) };
     },
   };
-  return { listAccounts: () => p.vault.listAccounts(), notebooks, sources, studio, chat, links, media };
+  return { listAccounts: () => p.vault.listAccounts(), notebooks, sources, studio, chat, links, media, vault: p.vault, throttle, rotationLimiter, fetch: fetchImpl };
 }
 
-const g = globalThis as unknown as { __runtime?: ToolRuntime };
+const g = globalThis as unknown as { __runtime?: CronRuntime };
 
 /** Process-wide runtime. Throws (vault/config errors) when production storage is not configured. */
-export function getRuntime(): ToolRuntime {
+export function getRuntime(): CronRuntime {
   if (!g.__runtime) {
     const { usage, audit } = createUsageAndAuditFromEnv(process.env);
     g.__runtime = createRuntime({ env: process.env, vault: getVault(), created: getCreatedObjects(), usage, audit });
