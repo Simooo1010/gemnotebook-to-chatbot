@@ -30,4 +30,11 @@ describe("buildHealthReport", () => {
     expect(json).not.toContain("OTHER_THING");
     expect(r.env.VAULT_ENCRYPTION_KEY).toBe(true);
   });
+
+  it("reports ownerPassphrase true if either passphrase name is set, as a boolean only", () => {
+    expect(buildHealthReport({}, "x").ownerPassphrase).toBe(false);
+    expect(buildHealthReport({ OWNER_PASSPHRASE: "p" }, "x").ownerPassphrase).toBe(true);
+    expect(buildHealthReport({ OWNER_PASSPHRASE_HASH: "h" }, "x").ownerPassphrase).toBe(true);
+    expect(buildHealthReport({ OWNER_PASSPHRASE: "  " }, "x").ownerPassphrase).toBe(false);
+  });
 });
