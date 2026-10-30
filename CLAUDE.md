@@ -40,6 +40,8 @@ src/app/layout.tsx        root layout, inline light/dark CSS, no external fonts
 src/app/page.tsx          home: "service is running"
 src/app/api/health/       GET /api/health
 src/lib/health.ts         pure health-report builder (+ health.test.ts)
+src/lib/vault/            crypto (AES-GCM), cookie jar, storage ports, memory adapters, vault service (+ tests)
+src/lib/auth/passphrase.ts owner passphrase verify + login limiter (+ test)
 ```
 
 ## Commands
