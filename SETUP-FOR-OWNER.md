@@ -19,3 +19,6 @@ Never paste secret values into chat. Claude generates the random ones and tells 
 
 ## On your device
 - [ ] Install a cookie-export extension (e.g. Cookie-Editor) in a desktop browser. For each Google account: open a **private window**, sign in at notebook.google.com, export the cookies as JSON, paste them on the vault page, then **close the private window without signing out**. No password is ever typed or stored.
+
+## Confirm
+- [ ] Confirm that `@modelcontextprotocol/server` 2.4.0 may stay installed. It is not on the approved list, but `mcp-handler` requires it as a peer dependency (our code never imports it directly). Claude will ask again in the final run.

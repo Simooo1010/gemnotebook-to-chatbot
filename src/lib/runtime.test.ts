@@ -63,6 +63,22 @@ describe("createRuntime end to end (fake fetch)", () => {
     expect(JSON.stringify(s.audit.rows)).not.toContain(SYN_SID);
   });
 
+  it("source_add_url goes tools -> source ops -> client: one mutation (izAoDd) then one status read, audit row without secrets", async () => {
+    const nb = uuid(1);
+    const srcRow = [[uuid(9)], "Example page", [null, 10, [1_700_000_000], null, 5, null, null, ["https://example.com/p"]], [null, 1]];
+    const s = await setup([
+      () => res(200),
+      () => res(200, { body: homepageHtml() }),
+      () => res(200, { body: batchBody("izAoDd", [[[[uuid(9)], "Example page"]]]) }),
+      () => res(200, { body: batchBody("rLM1Ne", [["NB", [srcRow], nb]]) }),
+    ]);
+    const r = await s.tools.sourceAddUrl.run({ notebookId: nb, url: "https://example.com/p" });
+    expect(r.isError).toBeUndefined();
+    expect(JSON.parse(r.content[0]!.text)).toMatchObject({ source: { id: uuid(9), title: "Example page", status: "processing" }, reconciled: false });
+    expect(s.audit.rows.map((x) => x.tool)).toEqual(["source_add_url", "GET_NOTEBOOK"]);
+    expect(JSON.stringify(s.audit.rows)).not.toContain(SYN_SID);
+  });
+
   it("honours NOTEBOOKLM_BASE_URL", async () => {
     const s = await setup(
       [() => res(200), () => res(200, { body: homepageHtml() }), () => res(200, { body: batchBody("wXbhsf", [[]]) })],

@@ -3,8 +3,20 @@ import type { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 import type { ToolRuntime } from "@/lib/runtime";
 import type { Account } from "@/lib/vault/storage";
+import {
+  MAX_TEXT_CONTENT_CHARS,
+  MAX_URL_CHARS,
+  driveFileIdSchema,
+  driveMimeSchema,
+  driveTitleSchema,
+  sourceTextContentSchema,
+  sourceTextTitleSchema,
+  sourceUrlSchema,
+  sourceYoutubeSchema,
+  type AddedSource,
+} from "@/lib/notebooklm/sources";
 import { resolveAccount } from "./accounts";
-import { ok, toolError, type ToolResult } from "./result";
+import { MAX_TEXT_RESULT_CHARS, ok, toolError, type ToolResult } from "./result";
 
 type McpServerT = Parameters<Parameters<typeof createMcpHandler>[0]>[0];
 
@@ -37,6 +49,16 @@ const accountArg = z
 const notebookIdArg = z.string().uuid().describe("Notebook id (UUID) from notebooks_list.");
 const titleArg = z.string().trim().min(1).max(200);
 
+const sourceIdArg = z.string().uuid().describe("Source id (UUID) from notebook_get or from the source_add_* result.");
+const MAX_GUIDE_CHARS = 20_000;
+const MAX_KEYWORDS = 50;
+
+const WAIT_NOTE =
+  "Importing happens in the background. Do not wait or poll inside one call: call notebook_get again after 15 seconds or more and look for this source with status 'ready'.";
+const ADD_DESC_TAIL =
+  " It adds one new source to the notebook (nothing is changed or deleted) and is not retried automatically: if the result says the outcome is unclear, call notebook_get before adding again. The result has the source id, title and a first status (processing, preparing, ready or error); a new source usually needs a while to become 'ready', so call notebook_get again after 15 seconds or more instead of waiting. Works on any notebook of the account.";
+
+const ADD_WRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
 const READ_GOOGLE: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
 function def<S extends z.ZodObject>(d: ToolDef<S>): ToolDef<S> {
@@ -48,11 +70,12 @@ export function createTools(getRuntime: () => ToolRuntime) {
   async function withAccount(
     requested: string | undefined,
     fn: (rt: ToolRuntime, account: Account) => Promise<unknown>,
+    maxChars?: number,
   ): Promise<ToolResult> {
     try {
       const rt = getRuntime();
       const account = resolveAccount(await rt.listAccounts(), requested);
-      return ok(await fn(rt, account));
+      return ok(await fn(rt, account), maxChars);
     } catch (e) {
       return toolError(e);
     }
@@ -168,7 +191,122 @@ export function createTools(getRuntime: () => ToolRuntime) {
       }),
   });
 
-  return { accountsList, notebooksList, notebookCreate, notebookRename, notebookGet, notebookSummary };
+  const addResult = (acc: Account, notebookId: string, s: AddedSource) => ({
+    account: who(acc),
+    notebookId,
+    source: { id: s.sourceId, title: s.title, status: s.status },
+    reconciled: s.reconciled,
+    next: s.status === "ready" ? "The source is ready." : WAIT_NOTE,
+  });
+
+  const sourceAddUrl = def({
+    name: "source_add_url",
+    title: "Add a web page as a source",
+    description: `Add a web page (http or https URL) to a notebook as a source.${ADD_DESC_TAIL}`,
+    inputSchema: z.object({
+      account: accountArg,
+      notebookId: notebookIdArg,
+      url: sourceUrlSchema.describe(`Public http(s) URL, at most ${MAX_URL_CHARS} characters, no username or password in it.`),
+    }),
+    annotations: ADD_WRITE,
+    run: ({ account, notebookId, url }) =>
+      withAccount(account, async (rt, acc) => addResult(acc, notebookId, await rt.sources.addSourceUrl(acc.id, notebookId, url))),
+  });
+
+  const sourceAddYoutube = def({
+    name: "source_add_youtube",
+    title: "Add a YouTube video as a source",
+    description: `Add a YouTube video (youtube.com or youtu.be URL) to a notebook as a source.${ADD_DESC_TAIL}`,
+    inputSchema: z.object({
+      account: accountArg,
+      notebookId: notebookIdArg,
+      url: sourceYoutubeSchema.describe("YouTube video URL (youtube.com or youtu.be)."),
+    }),
+    annotations: ADD_WRITE,
+    run: ({ account, notebookId, url }) =>
+      withAccount(account, async (rt, acc) => addResult(acc, notebookId, await rt.sources.addSourceYoutube(acc.id, notebookId, url))),
+  });
+
+  const sourceAddText = def({
+    name: "source_add_text",
+    title: "Add pasted text as a source",
+    description: `Add a piece of text you provide to a notebook as a source, with a title.${ADD_DESC_TAIL}`,
+    inputSchema: z.object({
+      account: accountArg,
+      notebookId: notebookIdArg,
+      title: sourceTextTitleSchema.describe("Title of the source (1-200 characters)."),
+      content: sourceTextContentSchema.describe(`The text (1-${MAX_TEXT_CONTENT_CHARS} characters).`),
+    }),
+    annotations: ADD_WRITE,
+    run: ({ account, notebookId, title, content }) =>
+      withAccount(account, async (rt, acc) => addResult(acc, notebookId, await rt.sources.addSourceText(acc.id, notebookId, title, content))),
+  });
+
+  const sourceAddDrive = def({
+    name: "source_add_drive",
+    title: "Add a Google Drive file as a source",
+    description: `Add a Google Drive file (Google Doc, Slides, Sheet, or PDF) that the connected Google account can open to a notebook as a source.${ADD_DESC_TAIL}`,
+    inputSchema: z.object({
+      account: accountArg,
+      notebookId: notebookIdArg,
+      fileId: driveFileIdSchema.describe("The Drive file id (the long id inside the file's URL)."),
+      mimeType: driveMimeSchema.describe("Type of the file: Google Doc, Slides, Sheet, or application/pdf."),
+      title: driveTitleSchema.describe("Title to show for the source (1-200 characters)."),
+    }),
+    annotations: ADD_WRITE,
+    run: ({ account, notebookId, fileId, mimeType, title }) =>
+      withAccount(account, async (rt, acc) => addResult(acc, notebookId, await rt.sources.addSourceDrive(acc.id, notebookId, { fileId, mimeType, title }))),
+  });
+
+  const sourceGetText = def({
+    name: "source_get_text",
+    title: "Read the text of a source",
+    description:
+      "Read the plain text of one source in a notebook. Only works when the source status is 'ready' (check with notebook_get; wait 15 seconds or more between checks). Long texts are cut at 60000 characters: 'truncated' is true then and 'totalChars' gives the full length.",
+    inputSchema: z.object({ account: accountArg, notebookId: notebookIdArg, sourceId: sourceIdArg }),
+    annotations: READ_GOOGLE,
+    run: ({ account, notebookId, sourceId }) =>
+      withAccount(account, async (rt, acc) => {
+        const t = await rt.sources.getSourceText(acc.id, notebookId, sourceId);
+        return { account: who(acc), notebookId, source: { id: t.sourceId, title: t.title }, text: t.text, truncated: t.truncated, totalChars: t.totalChars };
+      }, MAX_TEXT_RESULT_CHARS),
+  });
+
+  const sourceGetGuide = def({
+    name: "source_get_guide",
+    title: "Get a source's summary and keywords",
+    description:
+      "Get NotebookLM's own short summary and keywords for one source. Only works when the source status is 'ready' (check with notebook_get; wait 15 seconds or more between checks).",
+    inputSchema: z.object({ account: accountArg, notebookId: notebookIdArg, sourceId: sourceIdArg }),
+    annotations: READ_GOOGLE,
+    run: ({ account, notebookId, sourceId }) =>
+      withAccount(account, async (rt, acc) => {
+        const g = await rt.sources.getSourceGuide(acc.id, notebookId, sourceId);
+        return {
+          account: who(acc),
+          notebookId,
+          source: { id: g.sourceId, title: g.title },
+          summary: g.summary.slice(0, MAX_GUIDE_CHARS),
+          summaryTruncated: g.summary.length > MAX_GUIDE_CHARS,
+          keywords: g.keywords.slice(0, MAX_KEYWORDS),
+        };
+      }),
+  });
+
+  return {
+    accountsList,
+    notebooksList,
+    notebookCreate,
+    notebookRename,
+    notebookGet,
+    notebookSummary,
+    sourceAddUrl,
+    sourceAddYoutube,
+    sourceAddText,
+    sourceAddDrive,
+    sourceGetText,
+    sourceGetGuide,
+  };
 }
 
 export type Tools = ReturnType<typeof createTools>;
@@ -193,5 +331,11 @@ export function registerTools(server: McpServerT, getRuntime: () => ToolRuntime)
   register(server, t.notebookRename);
   register(server, t.notebookGet);
   register(server, t.notebookSummary);
+  register(server, t.sourceAddUrl);
+  register(server, t.sourceAddYoutube);
+  register(server, t.sourceAddText);
+  register(server, t.sourceAddDrive);
+  register(server, t.sourceGetText);
+  register(server, t.sourceGetGuide);
 }
 

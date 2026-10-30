@@ -68,6 +68,7 @@ Honest baseline: this is reverse-engineered access, so Google can change it or f
 - Code 3 can mean wrong payload shape, quota or async accept; reconcile before concluding.
 - Chat quota exhaustion shows as a stream with no payload frame; mapped to a quota error.
 - Notebook rename only for notebooks in `created_objects`; others are refused.
+- Additive writes (add source, create Studio artifact, chat turn) are allowed on any notebook of a connected account; rename is limited to notebooks this app created; nothing is ever deleted.
 
 ## 6. Build order (required)
 Each step is shippable and testable alone, ordered by the critical path (budget policy in `CLAUDE.md`). Every step ends committed + pushed, with `docs/PROGRESS.md` updated.
@@ -95,3 +96,4 @@ Each step is shippable and testable alone, ordered by the critical path (budget 
 | 2026-10-30 | Vercel-IP go/no-go in Step 3; if gated, build continues on unaffected work and Claude stops to report options (Plan B = owner-hosted worker) | Simooo1010 | 4 |
 | 2026-10-30 | Spec v1 approved; autonomous run Steps 1–8 authorised | Simooo1010 | all |
 | 2026-10-30 | Owner passphrase may be supplied as plain env OWNER_PASSPHRASE (compared in constant time) or as scrypt OWNER_PASSPHRASE_HASH; Claude-proposed, owner-informed | Claude, informed to Simooo1010 | 3 |
+| 2026-10-30 | Additive writes allowed on any notebook; rename restricted; no deletes (interpretation of CLAUDE.md write rule) | Claude, informed to Simooo1010 | 5 |
