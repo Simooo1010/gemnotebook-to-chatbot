@@ -29,11 +29,24 @@ docs/WORKFLOW.md          the method
 docs/SPEC.md              the product spec (source of truth)
 docs/SPEC.template.md     template
 docs/HOW-TO-WORK-WITH-CLAUDE.md
-(src layout is added by Step 1 and recorded here in the same commit)
+docs/PROGRESS.md          resume log, updated every step
+package.json              scripts + approved deps
+next.config.ts            security headers (no-store on /api/*, nosniff, no-referrer, DENY)
+tsconfig.json             TypeScript strict
+eslint.config.mjs         ESLint flat config (eslint-config-next)
+vitest.config.ts          Vitest (src/**/*.test.ts)
+.env.example              env var names only, no values
+src/app/layout.tsx        root layout, inline light/dark CSS, no external fonts
+src/app/page.tsx          home: "service is running"
+src/app/api/health/       GET /api/health
+src/lib/health.ts         pure health-report builder (+ health.test.ts)
 ```
 
 ## Commands
-Filled in by Step 1 (`npm run lint`, `npm run build`, `npm test`, `npm run dev`).
+- `npm run lint` — lint (ESLint)
+- `npm run build` — production build (must pass before every push)
+- `npm test` — unit tests (Vitest)
+- `npm run dev` — quick checks inside the sandbox only
 
 ## Where this runs
 - Development in Claude Code on the web (cloud sandbox). No local machine.
