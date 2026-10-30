@@ -56,6 +56,12 @@ src/app/.well-known/      oauth-protected-resource (+ /api/mcp suffix), oauth-au
 src/app/oauth/            authorize (consent page), consent (POST approve/deny), register, token, revoke
 src/app/api/vault/apps/   owner: [id]/revoke, revoke-all (connected apps)
 src/app/api/probe/google/ GET reachability probe (Bearer CRON_SECRET, metadata only)
+src/app/api/mcp/          GET/POST/DELETE/OPTIONS MCP endpoint (Streamable HTTP via mcp-handler, bearer auth)
+src/lib/mcp/route.ts      /api/mcp handling with injected deps: verifyAccessToken, 401 challenge, CORS (+ test)
+src/lib/tools/            MCP tools (accounts_list, notebooks_*, notebook_*), account resolution, error-to-isError mapping (+ tests)
+src/lib/runtime.ts        runtime composition (vault, throttle, usage/audit adapters, Google client, notebook ops), cached on globalThis (+ test)
+src/lib/google/supabase.ts UsageCounter + audit_log adapters over Db (+ test)
+docs/CONNECT.md           how to add the connector in claude.ai, consent screen, revoke
 supabase/                 migrations (0001_vault.sql, 0002_oauth.sql, applied in the final manual run) + README
 ```
 
