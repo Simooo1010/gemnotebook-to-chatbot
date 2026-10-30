@@ -48,7 +48,7 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
 ## Next
 1. (done) Spec v1 approved 2026-10-30 incl. paste-JSON import and Vercel-IP go/no-go.
 2. Step 2 — Vault and owner gate: 2a and 2b done (branch `step-2-vault`, draft PR against `step-1-scaffold`). The SQL migration is applied in the final manual run once the owner names the Supabase project.
-3. Step 3a-3c code done. Step 4a (OAuth) done. Step 4b done (code). Step 5 (sources) done (code, branch `step-5-sources`, draft PR against `step-4-mcp`). Step 6 (audio/video overviews + downloads) done (code, branch `step-6-studio`, draft PR against `step-5-sources`). Next = Step 7 (chat with citations); not started.
+3. Step 3a-3c code done. Step 4a (OAuth) done. Step 4b done (code). Step 5 (sources) done (code, branch `step-5-sources`, draft PR against `step-4-mcp`). Step 6 (audio/video overviews + downloads) done (code, branch `step-6-studio`, draft PR against `step-5-sources`). Step 7a (chat streaming transport: `chatStream` on the Google client; throttled, daily cap 'chat', never retried, 120 s timeout, 2 MB cap) done (branch `step-7-chat`, no PR yet). Next = Step 7b (chat operations + MCP tool).
 
 ## Standing rules
 - Opus subagents: effort low at most (never higher). Sonnet/Haiku: High at most.

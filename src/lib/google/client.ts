@@ -1,15 +1,19 @@
-import { buildBatchUrl, encodeBatchBody } from "@/lib/rpc/batchexecute";
+import { buildBatchUrl, buildChatUrl, encodeBatchBody, encodeChatBody, nextReqId } from "@/lib/rpc/batchexecute";
+import { CHAT_RPC_LABEL } from "@/lib/rpc/chat";
 import { decodeBatchResponse } from "@/lib/rpc/decode";
-import { RpcAuthError, RpcError, RpcQuotaError, RpcStatusError, errorForHttpStatus } from "@/lib/rpc/errors";
+import { RpcAuthError, RpcError, RpcNoFramesError, RpcQuotaError, RpcStatusError, errorForHttpStatus } from "@/lib/rpc/errors";
 import { resolveRpcId, sourcePathFor, type RpcName } from "@/lib/rpc/ids";
 import type { CookieJar } from "@/lib/vault/jar";
 import type { AccountRepo } from "@/lib/vault/storage";
 import {
   AccountNeedsReauthError,
   AmbiguousMutationError,
+  ChatEmptyResponseError,
+  ChatResponseTooLargeError,
   CookieMismatchError,
   HttpStatusError,
   NetworkError,
+  RegionGateError,
   RotateAuthError,
   SignedOutError,
   StaleTokenMutationError,
@@ -43,6 +47,10 @@ export interface GoogleClientConfig {
   authuser?: string | number;
   rpcTimeoutMs?: number;
   tokenTtlMs?: number;
+  /** Chat turn timeout (whole response). Default 120 s. */
+  chatTimeoutMs?: number;
+  /** Chat response size cap in bytes. Default 2 MB. */
+  chatMaxBytes?: number;
 }
 
 export interface GoogleClientDeps {
@@ -67,6 +75,48 @@ export interface RpcCall {
   /** Tool name for the audit row (defaults to the RPC name). */
   tool?: string;
   allowNull?: boolean;
+}
+
+/** One chat turn (PROTOCOL §2.3). Always a mutation: never retried. */
+export interface ChatStreamCall {
+  accountId: string;
+  notebookId?: string;
+  /** Built by chatParams (Step 3a). */
+  params: unknown;
+  usageKind: "chat";
+  /** Tool name for the audit row. */
+  tool: string;
+}
+export interface ChatStreamResult {
+  /** Raw response body for parseChatResponse. Never log it. */
+  text: string;
+  reqId: number;
+}
+
+export const DEFAULT_CHAT_TIMEOUT_MS = 120_000;
+export const DEFAULT_CHAT_MAX_BYTES = 2 * 1024 * 1024;
+
+async function readCapped(response: { body: ReadableStream<Uint8Array> | null; text(): Promise<string> }, max: number): Promise<string> {
+  if (!response.body) {
+    const t = await response.text();
+    if (Buffer.byteLength(t, "utf8") > max) throw new ChatResponseTooLargeError(max);
+    return t;
+  }
+  const reader = response.body.getReader();
+  const dec = new TextDecoder();
+  let n = 0;
+  let out = "";
+  for (;;) {
+    const r = await reader.read();
+    if (r.done) break;
+    n += r.value.byteLength;
+    if (n > max) {
+      await reader.cancel().catch(() => undefined);
+      throw new ChatResponseTooLargeError(max);
+    }
+    out += dec.decode(r.value, { stream: true });
+  }
+  return out + dec.decode();
 }
 
 const sameJar = (a: CookieJar, b: CookieJar) => JSON.stringify(a) === JSON.stringify(b);
@@ -172,14 +222,21 @@ export function createGoogleClient(deps: GoogleClientDeps) {
     }
   }
 
-  async function execute(call: RpcCall, rpcId: string): Promise<unknown> {
+  type Post<T> = (tokens: SessionTokens, jar: CookieJar) => Promise<{ result: T; jar: CookieJar }>;
+
+  function execute(call: RpcCall, rpcId: string): Promise<unknown> {
+    return executeWith(call.accountId, rpcId, call.kind === "mutate", (t, j) => postOnce(call, rpcId, t, j));
+  }
+
+  async function executeWith<T>(accountId: string, rpcId: string, isMutation: boolean, post: Post<T>): Promise<T> {
+    const call = { accountId, kind: isMutation ? "mutate" : "read" };
     const original = await deps.vault.getJar(call.accountId);
     let jar = original;
     let tokens = cache.get(call.accountId);
     if (!tokens) ({ tokens, jar } = await freshTokens(call.accountId, jar));
     try {
       try {
-        const r = await postOnce(call, rpcId, tokens, jar);
+        const r = await post(tokens, jar);
         jar = r.jar;
         return r.result;
       } catch (e) {
@@ -201,7 +258,7 @@ export function createGoogleClient(deps: GoogleClientDeps) {
         cache.invalidate(call.accountId);
         ({ tokens, jar } = await freshTokens(call.accountId, jar));
         try {
-          const r = await postOnce(call, rpcId, tokens, jar);
+          const r = await post(tokens, jar);
           jar = r.jar;
           return r.result;
         } catch (e2) {
@@ -219,7 +276,97 @@ export function createGoogleClient(deps: GoogleClientDeps) {
     }
   }
 
+  let lastReqId: number | undefined;
+
+  async function postChat(call: ChatStreamCall, tokens: SessionTokens, jar: CookieJar) {
+    const label = CHAT_RPC_LABEL;
+    lastReqId = nextReqId(lastReqId);
+    const reqId = lastReqId;
+    const url = buildChatUrl({ base, bl: tokens.bl ?? "", reqId, fsid: tokens.fsid, authuser: deps.config.authuser });
+    const body = encodeChatBody({ params: call.params, at: tokens.at });
+    const signal = AbortSignal.timeout(deps.config.chatTimeoutMs ?? DEFAULT_CHAT_TIMEOUT_MS);
+    const isAbort = (e: unknown) => e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+    let res;
+    try {
+      res = await fetchWithJar(
+        deps.fetch,
+        jar,
+        url,
+        {
+          method: "POST",
+          headers: {
+            ...browserHeaders("xhr"),
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+            Origin: base,
+            Referer: `${base}/`,
+            "X-Same-Domain": "1",
+          },
+          body,
+          signal,
+        },
+        { now },
+      );
+    } catch (e) {
+      if (e instanceof RpcError || (e instanceof Error && "kind" in e)) throw e;
+      throw new AmbiguousMutationError(label, isAbort(e) ? "timeout" : "network");
+    }
+    const { response } = res;
+    const httpErr = errorForHttpStatus(label, response.status, response.headers.get("retry-after"));
+    if (httpErr) {
+      await response.body?.cancel().catch(() => undefined);
+      throw httpErr;
+    }
+    if (response.status >= 500) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new AmbiguousMutationError(label, `HTTP ${response.status}`);
+    }
+    if (response.status !== 200) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new HttpStatusError(label, response.status);
+    }
+    let text: string;
+    try {
+      text = await readCapped(response, deps.config.chatMaxBytes ?? DEFAULT_CHAT_MAX_BYTES);
+    } catch (e) {
+      if (e instanceof ChatResponseTooLargeError) throw e;
+      throw new AmbiguousMutationError(label, isAbort(e) ? "timeout" : "body read failed");
+    }
+    const trimmed = text.trim();
+    if (trimmed === "" || trimmed === ")]}'") throw new ChatEmptyResponseError(label);
+    const ct = response.headers.get("content-type") ?? "";
+    if (/text\/html/i.test(ct) || trimmed.startsWith("<")) {
+      if (/location=unsupported|not available in your (country|region)/i.test(text)) throw new RegionGateError(new URL(res.finalUrl).hostname);
+      throw new RpcNoFramesError(label);
+    }
+    // Frames (or the bare terminal "e" frame of an exhausted quota) are left to parseChatResponse.
+    if (!text.includes('"wrb.fr"') && !text.includes('["e"')) throw new RpcNoFramesError(label);
+    return { result: { text, reqId } as ChatStreamResult, jar: res.jar };
+  }
+
   return {
+    /**
+     * One chat turn over the streamed endpoint. Same pipeline as rpc (throttle, daily cap, tokens, jar, audit).
+     * A mutation: never retried. Returns the raw body; parse with parseChatResponse.
+     */
+    async chatStream(call: ChatStreamCall): Promise<ChatStreamResult> {
+      let outcome = "ok";
+      try {
+        const result = await deps.throttle.schedule(
+          call.accountId,
+          () => executeWith(call.accountId, CHAT_RPC_LABEL, true, (t, j) => postChat(call, t, j)),
+          { usageKind: call.usageKind },
+        );
+        deps.throttle.noteSuccess(call.accountId);
+        return result;
+      } catch (e) {
+        outcome = outcomeOf(e);
+        throw e;
+      } finally {
+        await deps.audit
+          .write({ accountId: call.accountId, tool: call.tool, rpcId: CHAT_RPC_LABEL, outcome, at: new Date(now()) })
+          .catch(() => undefined);
+      }
+    },
     async rpc(call: RpcCall): Promise<unknown> {
       const rpcId = resolveRpcId(call.name, deps.config.rpcOverridesJson);
       let outcome = "ok";
