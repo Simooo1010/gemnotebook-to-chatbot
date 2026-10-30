@@ -1,4 +1,5 @@
 // Route tests run the real mcp-handler against an in-memory OAuth store and a fake tool runtime. No network.
+import type { ChatOps } from "@/lib/notebooklm/chat";
 import { describe, expect, it, vi } from "vitest";
 import { sha256hex } from "@/lib/oauth/crypto";
 import type { OAuthDeps } from "@/lib/oauth/deps";
@@ -34,6 +35,7 @@ async function setup(opts: { runtime?: () => ToolRuntime; oauth?: () => OAuthDep
       notebooks: {} as NotebookOps,
       sources: {} as SourceOps,
       studio: {} as StudioOps,
+      chat: {} as ChatOps,
       links: {} as MediaLinks,
       media: {} as MediaDownloader,
     };
@@ -149,6 +151,7 @@ describe("/api/mcp with a valid token", () => {
     expect(tools.map((t) => t.name).sort()).toEqual(
       [
         "accounts_list",
+        "chat_ask",
         "notebook_create",
         "notebook_get",
         "notebook_rename",
@@ -178,6 +181,7 @@ describe("/api/mcp with a valid token", () => {
     for (const n of ["studio_audio_create", "studio_video_create"]) {
       expect(tools.find((t) => t.name === n)!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
     }
+    expect(tools.find((t) => t.name === "chat_ask")!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true });
     for (const n of ["studio_status", "studio_download_link"]) expect(tools.find((t) => t.name === n)!.annotations.readOnlyHint).toBe(true);
   });
 

@@ -3,6 +3,8 @@ import { ZodError } from "zod";
 import {
   AccountNeedsReauthError,
   AmbiguousMutationError,
+  ChatEmptyResponseError,
+  ChatResponseTooLargeError,
   CookieMismatchError,
   CooldownActiveError,
   DailyCapReachedError,
@@ -17,6 +19,7 @@ import {
   TooManyRedirectsError,
   UnknownHomepageError,
 } from "@/lib/google/errors";
+import { ChatNewThreadUnsupportedError, ChatTurnUnconfirmedError } from "@/lib/notebooklm/chat";
 import { CreatedObjectsConfigError } from "@/lib/notebooklm/created";
 import { MediaLinkConfigError } from "@/lib/notebooklm/media-link";
 import {
@@ -47,6 +50,8 @@ export interface ToolResult {
 export const MAX_RESULT_CHARS = 24_000;
 /** Larger cap for tools whose whole purpose is returning text (source_get_text). */
 export const MAX_TEXT_RESULT_CHARS = 100_000;
+/** chat_ask: answer (10 000) + up to 20 citations of 400-char excerpts, with headroom for JSON escaping. */
+export const MAX_CHAT_RESULT_CHARS = 40_000;
 
 const text = (t: string, isError?: boolean): ToolResult => ({ content: [{ type: "text", text: t }], ...(isError ? { isError: true } : {}) });
 
@@ -102,7 +107,7 @@ export function toolError(e: unknown): ToolResult {
       selected_unknown: "One of the sourceIds is not in this notebook. Call notebook_get to see the source ids.",
       selected_not_ready: `One of the chosen sources is not ready yet (${ready} of ${total} are). Call notebook_get again after 15 seconds or more, or leave sourceIds out to use all ready sources.`,
     };
-    return fail(`Nothing was started. ${why[e.reason]}`);
+    return fail(`Nothing was started or sent. ${why[e.reason]}`);
   }
   if (e instanceof StudioCreateUnconfirmedError) {
     return fail(
@@ -125,6 +130,20 @@ export function toolError(e: unknown): ToolResult {
   if (e instanceof ArtifactNotDownloadableError) {
     return fail("Only audio and video overviews can be downloaded. Use studio_status to find the right artifact id.");
   }
+  if (e instanceof ChatNewThreadUnsupportedError) {
+    return fail("Starting a fresh conversation is not supported yet, so nothing was sent. Ask again without it; to continue the same thread pass the conversationId from the previous answer.");
+  }
+  if (e instanceof ChatTurnUnconfirmedError) {
+    return fail(
+      "The question may or may not have reached NotebookLM (no clear answer came back). Asking again is harmless but uses one of the account's daily chats, so retry at most once, and only if the user still wants the answer.",
+    );
+  }
+  if (e instanceof ChatEmptyResponseError) {
+    return fail("NotebookLM answered with an empty reply, so there is no answer to show. The question may have been recorded. Wait a little and ask again once; if it keeps happening, tell the owner.");
+  }
+  if (e instanceof ChatResponseTooLargeError) {
+    return fail("NotebookLM's reply was too large to handle and was discarded. Ask a narrower question, or limit it to fewer sources with sourceIds.");
+  }
   if (e instanceof StaleTokenMutationError) {
     return fail("The change was NOT confirmed (the session token was stale and has been refreshed). Check with notebooks_list or notebook_get whether it was applied, then retry only if it was not.");
   }
@@ -144,7 +163,7 @@ export function toolError(e: unknown): ToolResult {
     return fail("NotebookLM's response format has changed and the connector cannot read it safely. Do not retry; tell the owner the connector needs an update.");
   }
   if (e instanceof RpcQuotaError) {
-    return fail("NotebookLM says this account has hit a usage limit (free accounts only get a few audio and video overviews per day). Wait a while before trying again; the connector will not retry automatically.");
+    return fail("NotebookLM says this account has hit a usage limit (free accounts only get a limited number of chats and audio and video overviews per day). Wait a while before trying again; the connector will not retry automatically.");
   }
   if (e instanceof CooldownActiveError) {
     return fail(`This account is cooling down after a rate limit. Try again in about ${Math.max(1, Math.ceil(e.retryAfterMs / 1000))} seconds.`);

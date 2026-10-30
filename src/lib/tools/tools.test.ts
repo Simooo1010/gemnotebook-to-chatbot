@@ -1,4 +1,5 @@
 // Fixtures are SYNTHETIC. The fake runtime never touches the network.
+import type { ChatOps } from "@/lib/notebooklm/chat";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -78,6 +79,7 @@ function fake(accounts: Account[], ops: Partial<Ops> = {}, srcOps: Partial<SrcOp
     notebooks: notebooks as unknown as NotebookOps,
     sources: sources as unknown as SourceOps,
     studio: {} as StudioOps,
+    chat: {} as ChatOps,
     links: {} as MediaLinks,
     media: {} as MediaDownloader,
   };

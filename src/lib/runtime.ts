@@ -4,6 +4,7 @@ import { createGoogleClient, type AuditSink } from "@/lib/google/client";
 import type { FetchLike } from "@/lib/google/http";
 import { MemoryAuditSink, SupabaseAuditSink, SupabaseUsageCounter } from "@/lib/google/supabase";
 import { MemoryUsageCounter, createThrottle, type UsageCounter } from "@/lib/google/throttle";
+import { createChatOps, type ChatOps } from "@/lib/notebooklm/chat";
 import { getCreatedObjects, type CreatedObjects } from "@/lib/notebooklm/created";
 import { createNotebookOps, type NotebookOps } from "@/lib/notebooklm/notebooks";
 import { createMediaDownloader, type MediaDownloader } from "@/lib/notebooklm/media-download";
@@ -29,6 +30,7 @@ export interface ToolRuntime {
   notebooks: NotebookOps;
   sources: SourceOps;
   studio: StudioOps;
+  chat: ChatOps;
   /** Signed download links (needs OAUTH_SIGNING_KEY and PUBLIC_BASE_URL; throws RuntimeConfigError / MediaLinkConfigError otherwise). */
   links: MediaLinks;
   /** Used by GET /api/media/<token>. */
@@ -118,6 +120,7 @@ export function createRuntime(p: RuntimeParts): ToolRuntime {
   const notebooks = createNotebookOps({ client, created: p.created, rpcOverridesJson, now: p.now });
   const sources = createSourceOps({ client, created: p.created, notebooks, rpcOverridesJson, now: p.now });
   const studio = createStudioOps({ client, created: p.created, notebooks, rpcOverridesJson, now: p.now });
+  const chat = createChatOps({ client, notebooks, rpcOverridesJson });
   const media = createMediaDownloader({ studio, vault: p.vault, throttle, fetch: fetchImpl, audit: p.audit, now: p.now });
   const links: MediaLinks = {
     create(a) {
@@ -130,7 +133,7 @@ export function createRuntime(p: RuntimeParts): ToolRuntime {
       return { url: mediaUrl(base, token), expiresAt: new Date(expiresAt) };
     },
   };
-  return { listAccounts: () => p.vault.listAccounts(), notebooks, sources, studio, links, media };
+  return { listAccounts: () => p.vault.listAccounts(), notebooks, sources, studio, chat, links, media };
 }
 
 const g = globalThis as unknown as { __runtime?: ToolRuntime };

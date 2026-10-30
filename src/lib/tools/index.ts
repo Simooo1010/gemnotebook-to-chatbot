@@ -15,6 +15,7 @@ import {
   sourceYoutubeSchema,
   type AddedSource,
 } from "@/lib/notebooklm/sources";
+import { MAX_QUESTION_CHARS, conversationIdSchema, questionSchema } from "@/lib/notebooklm/chat";
 import { MEDIA_CONTENT_TYPE, DEFAULT_TTL_SECONDS } from "@/lib/notebooklm/media-link";
 import {
   MAX_FOCUS_PROMPT_CHARS,
@@ -28,7 +29,7 @@ import {
   type CreatedOverview,
 } from "@/lib/notebooklm/studio";
 import { resolveAccount } from "./accounts";
-import { MAX_TEXT_RESULT_CHARS, ok, toolError, type ToolResult } from "./result";
+import { MAX_CHAT_RESULT_CHARS, MAX_TEXT_RESULT_CHARS, ok, toolError, type ToolResult } from "./result";
 
 type McpServerT = Parameters<Parameters<typeof createMcpHandler>[0]>[0];
 
@@ -421,6 +422,39 @@ export function createTools(getRuntime: () => ToolRuntime) {
         };
       }),
   });
+
+  // --- Chat with citations ---
+  const chatAsk = def({
+    name: "chat_ask",
+    title: "Ask a notebook a question",
+    description: `Ask a NotebookLM notebook a question and get an answer with citations. The answer comes only from the notebook's own sources (never from general knowledge or the web), and cites them with [N] markers in the text; the 'citations' list maps each number N to the source (sourceId, sourceTitle when known) and the quoted passage. Tell the user the answer is based on their sources and keep the [N] markers or turn them into references. By default all 'ready' sources are used; pass sourceIds (from notebook_get, all must be 'ready') to narrow it. If the notebook has no ready source nothing is sent. The first answer returns a conversationId: pass it back as conversationId to ask a follow-up in the same conversation (the follow-up is understood in context). Questions can be up to ${MAX_QUESTION_CHARS} characters. This adds one turn to the notebook's chat history (nothing is changed or deleted) and is never retried automatically; free Google accounts have a daily chat limit and this connector also keeps its own daily chat cap per account: when it is reached the call says so and nothing is sent. Starting a brand-new conversation is not supported yet. The answer may also include suggestedQuestions.`,
+    inputSchema: z.object({
+      account: accountArg,
+      notebookId: notebookIdArg,
+      question: questionSchema.describe(`The question (1 to ${MAX_QUESTION_CHARS} characters).`),
+      sourceIds: z.array(z.string().uuid()).min(1).max(300).optional().describe("Optional: only answer from these sources (ids from notebook_get; all must be 'ready'). Leave out to use every ready source."),
+      conversationId: conversationIdSchema.optional().describe("Optional: the conversationId from a previous chat_ask answer, to continue that conversation."),
+    }),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    run: ({ account, notebookId, question, sourceIds, conversationId }) =>
+      withAccount(
+        account,
+        async (rt, acc) => {
+          const r = await rt.chat.askNotebook(acc.id, notebookId, { question, sourceIds, conversationId });
+          return {
+            account: who(acc),
+            notebookId,
+            ...r,
+            note: [
+              "The answer is based only on the notebook's sources; [N] markers refer to the citations list.",
+              ...(r.answerTruncated || r.citationsOmitted > 0 ? ["Part of the result was cut for size: ask a narrower question or use sourceIds for more detail."] : []),
+              ...(r.conversationId ? ["To ask a follow-up in this conversation, pass this conversationId."] : ["No conversationId could be read, so a follow-up starts from the notebook's current conversation."]),
+            ].join(" "),
+          };
+        },
+        MAX_CHAT_RESULT_CHARS,
+      ),
+  });
   return {
     accountsList,
     notebooksList,
@@ -438,6 +472,7 @@ export function createTools(getRuntime: () => ToolRuntime) {
     studioVideoCreate,
     studioStatus,
     studioDownloadLink,
+    chatAsk,
   };
 }
 
@@ -473,5 +508,6 @@ export function registerTools(server: McpServerT, getRuntime: () => ToolRuntime)
   register(server, t.studioVideoCreate);
   register(server, t.studioStatus);
   register(server, t.studioDownloadLink);
+  register(server, t.chatAsk);
 }
 
