@@ -1,4 +1,5 @@
 // Fixtures are SYNTHETIC. Fake ops and a scripted fake fetch; no network.
+import type { ChatOps } from "@/lib/notebooklm/chat";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryAuditSink } from "@/lib/google/supabase";
 import { MemoryUsageCounter } from "@/lib/google/throttle";
@@ -35,6 +36,7 @@ function fake() {
     notebooks: {} as NotebookOps,
     sources: {} as SourceOps,
     studio: studio as unknown as StudioOps,
+    chat: {} as ChatOps,
     links: links as unknown as MediaLinks,
     media: {} as never,
   };

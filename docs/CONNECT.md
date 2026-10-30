@@ -1,6 +1,6 @@
 # Connect Claude to your notebooks
 
-Status: Steps 4 to 6 code is complete but **not yet verified against a real claude.ai connector or a real Google account** (needs a deploy with the owner's environment variables first, see `SETUP-FOR-OWNER.md`).
+Status: Steps 4 to 7 code is complete but **not yet verified against a real claude.ai connector or a real Google account** (needs a deploy with the owner's environment variables first, see `SETUP-FOR-OWNER.md`).
 
 ## The MCP URL
 
@@ -37,6 +37,17 @@ Tools: `studio_audio_create`, `studio_video_create`, `studio_status`, `studio_do
 Limits: free Google accounts only get a few audio and video overviews per day. This connector also keeps its own daily limit per account (default 2 audio and 2 video per UTC day). When a limit is reached nothing is started and nothing is retried; try again tomorrow. A failed overview is not retried either (starting a new one counts again). If a start request gives an unclear answer, Claude checks `studio_status` before starting another one, so you do not get duplicates.
 
 The link needs `PUBLIC_BASE_URL` and `OAUTH_SIGNING_KEY` to be set on the server (see `SETUP-FOR-OWNER.md`). The media address never contains Google cookies or Google file addresses.
+
+## Asking questions with citations (Step 7)
+
+Tool: `chat_ask`. In plain words:
+
+1. Make sure the notebook has at least one source that is **ready** (Claude checks this; if none is ready nothing is sent and Claude tells you what to do).
+2. Ask Claude something about the notebook, for example "In my Cats notebook, how long do cats sleep? Cite your sources." Claude sends your question to NotebookLM, which answers **only from the notebook's own sources** (not from the web or general knowledge).
+3. The answer comes back with numbers like [1] and [2]. Each number points to a source (its title) and the short passage it came from. You can also tell Claude to use only some sources.
+4. To ask a follow-up in the same conversation ("and what about kittens?"), Claude passes along the conversation id from the first answer. Starting a completely fresh conversation is not supported yet.
+
+Limits: free Google accounts only get a limited number of chat questions per day. This connector also keeps its own daily limit per account (default 30 per UTC day). When a limit is reached nothing is sent and nothing is retried; try again tomorrow. If an answer is very long, it is cut and Claude is told so (ask a narrower question). If a request gives an unclear answer, Claude may retry once at most. Your questions and the answers are not stored or logged by this connector; the chat itself shows up in the notebook's chat history in NotebookLM.
 
 ## Revoke access
 

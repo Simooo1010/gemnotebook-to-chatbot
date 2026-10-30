@@ -137,3 +137,19 @@ export class CooldownActiveError extends GoogleTransportError {
     super(`account is cooling down after a rate limit; retry in ${Math.ceil(retryAfterMs / 1000)} s`);
   }
 }
+
+/** Chat response exceeded the size cap; body discarded. */
+export class ChatResponseTooLargeError extends GoogleTransportError {
+  override readonly kind = "chat_too_large";
+  constructor(readonly maxBytes: number) {
+    super(`chat response exceeded ${maxBytes} bytes; discarded`);
+  }
+}
+
+/** Chat endpoint answered 200 with an empty body. The turn may or may not have been recorded. */
+export class ChatEmptyResponseError extends GoogleTransportError {
+  override readonly kind = "chat_empty";
+  constructor(readonly rpcId: string) {
+    super(`RPC ${rpcId}: empty response body`);
+  }
+}
