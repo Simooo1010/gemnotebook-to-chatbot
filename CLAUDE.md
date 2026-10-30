@@ -47,6 +47,10 @@ src/lib/owner/            request handlers for login/logout/vault API with injec
 src/app/api/owner/        POST login, POST logout
 src/app/api/vault/        accounts (GET list, POST import), accounts/[id]/kill, revoke-all
 src/app/login, src/app/vault  owner login page and vault page (+ small client forms)
+src/lib/rpc/              pure batchexecute codec, params builders, row decoders (+ tests)
+src/lib/google/           transport: throttle, http (manual redirects), tokens, keep-alive, client, probe.ts (+ tests)
+src/lib/notebooklm/       typed operations: created.ts (write allow-list), notebooks.ts (+ tests)
+src/app/api/probe/google/ GET reachability probe (Bearer CRON_SECRET, metadata only)
 supabase/                 migrations (0001_vault.sql, applied in the final manual run) + README
 ```
 
