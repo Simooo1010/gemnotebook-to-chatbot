@@ -1,6 +1,6 @@
 {
  "total": 137,
- "failed": 1,
+ "failed": 0,
  "screenshots": 40,
  "results": [
   {
@@ -276,8 +276,8 @@
   {
    "step": "3 Vault import / kill / revoke",
    "name": "missing cookie: names only __Secure-1PSIDTS",
-   "ok": false,
-   "detail": "Something went wrong. Nothing was changed. The box was cleared; paste the export again."
+   "ok": true,
+   "detail": "The export is missing required cookies. Missing: __Secure-1PSIDTS. The box was cleared; paste the export again."
   },
   {
    "step": "3 Vault import / kill / revoke",
@@ -487,7 +487,7 @@
    "step": "4 OAuth + MCP",
    "name": "accounts_list 200 and not an error",
    "ok": true,
-   "detail": "event: message\ndata: {\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"accounts\\\":[{\\\"id\\\":\\\"d7f00916-d0cb-45ae-81c6-b379f"
+   "detail": "event: message\ndata: {\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"accounts\\\":[{\\\"id\\\":\\\"5ea44c58-9afc-4679-a878-8769d"
   },
   {
    "step": "4 OAuth + MCP",
