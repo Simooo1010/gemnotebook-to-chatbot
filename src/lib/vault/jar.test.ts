@@ -142,3 +142,25 @@ describe("redact / jarSummary", () => {
     expect(JSON.stringify(s)).not.toContain("fake-");
   });
 });
+
+describe("primary session cookie alternatives", () => {
+  it("accepts __Secure-1PSID when the legacy SID is absent (newer Google sessions)", () => {
+    const jar = parseCookieExport([ce("__Secure-1PSID", ".google.com"), ce("__Secure-1PSIDTS", ".google.com"), ce("SAPISID", ".google.com")]);
+    expect(jar.cookies.map((c) => c.name).sort()).toEqual(["SAPISID", "__Secure-1PSID", "__Secure-1PSIDTS"]);
+    expect(jarSummary(jar).hasRequired).toBe(true);
+  });
+  it("still rejects an export with neither SID nor __Secure-1PSID, naming only SID", () => {
+    const e = catchJar(() => parseCookieExport([ce("__Secure-1PSIDTS", ".google.com"), ce("SAPISID", ".google.com")]));
+    expect(e.code).toBe("missing_required");
+    expect(e.missing).toEqual(["SID"]);
+  });
+  it("still requires __Secure-1PSIDTS even when __Secure-1PSID is present", () => {
+    const e = catchJar(() => parseCookieExport([ce("__Secure-1PSID", ".google.com")]));
+    expect(e.code).toBe("missing_required");
+    expect(e.missing).toEqual(["__Secure-1PSIDTS"]);
+  });
+  it("a __Secure-1PSID on a disallowed domain does not count", () => {
+    const e = catchJar(() => parseCookieExport([ce("__Secure-1PSID", "evil.com"), ce("__Secure-1PSIDTS", ".google.com")]));
+    expect(e.missing).toEqual(["SID"]);
+  });
+});
