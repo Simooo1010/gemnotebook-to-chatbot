@@ -7,7 +7,10 @@ import { consentCsrfToken } from "@/lib/oauth/csrf";
 import { resolveBaseUrl } from "@/lib/oauth/metadata";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Allow access · NotebookLM connector" };
+// The site-wide header says no-referrer, and with that policy browsers send "Origin: null" on a form POST,
+// which /oauth/consent rejects (fail closed) -> Approve/Deny would always answer 403. Same-origin keeps the real
+// Origin on the form POST and still sends no Referer to any other site (including the redirect back to the client).
+export const metadata = { title: "Allow access · NotebookLM connector", referrer: "same-origin" as const };
 
 type SP = Record<string, string | string[] | undefined>;
 
