@@ -60,3 +60,19 @@ describe("createLoginLimiter", () => {
     expect(l.recordFailure("k").allowed).toBe(true);
   });
 });
+
+describe("login limiter attempt() (registers before verification)", () => {
+  it("allows maxFailures attempts, then denies, resets on success and after the lockout", () => {
+    let t = 0;
+    const l = createLoginLimiter({ maxFailures: 3, now: () => t });
+    for (let i = 0; i < 3; i++) expect(l.attempt("k").allowed).toBe(true);
+    const d = l.attempt("k");
+    expect(d.allowed).toBe(false);
+    expect(d.retryAfterMs).toBeGreaterThan(0);
+    expect(l.attempt("other").allowed).toBe(true);
+    t += 16 * 60_000;
+    expect(l.attempt("k").allowed).toBe(true);
+    l.recordSuccess("k");
+    for (let i = 0; i < 3; i++) expect(l.attempt("k").allowed).toBe(true);
+  });
+});

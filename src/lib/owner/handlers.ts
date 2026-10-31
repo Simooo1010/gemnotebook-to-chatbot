@@ -1,7 +1,8 @@
 // Request handling for owner login and the vault API. Pure functions with injected deps, so every
 // auth / CSRF / limiter path is unit-testable. Never logs or echoes passphrases, cookies or pasted JSON.
 import { createHash } from "node:crypto";
-import { createLoginLimiter, verifyOwnerPassphrase } from "@/lib/auth/passphrase";
+import type { LoginLimiter } from "@/lib/auth/login-limiter";
+import { verifyOwnerPassphrase } from "@/lib/auth/passphrase";
 import {
   checkOrigin,
   clearedCookie,
@@ -15,11 +16,10 @@ import { VaultError, type Vault } from "@/lib/vault/vault";
 import type { Account } from "@/lib/vault/storage";
 
 type Env = Record<string, string | undefined>;
-type Limiter = ReturnType<typeof createLoginLimiter>;
 
 export interface OwnerDeps {
   env: Env;
-  limiter: Limiter;
+  limiter: LoginLimiter;
   /** Lazy: may throw when storage is not configured (→ 503). */
   getVault: () => Vault;
   now?: () => number;
@@ -32,7 +32,6 @@ const MAX_IMPORT_BODY = 512 * 1024;
 const MAX_LABEL = 60;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const sharedLimiter: Limiter = createLoginLimiter();
 
 function json(status: number, body: unknown, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -79,7 +78,8 @@ export async function handleLogin(request: Request, deps: OwnerDeps): Promise<Re
   const random = deps.random ?? Math.random;
   const key = clientKey(request);
 
-  const gate = deps.limiter.check(key);
+  // The attempt is registered before the passphrase is checked, so parallel guesses are counted too.
+  const gate = await deps.limiter.attempt(key);
   if (!gate.allowed) {
     return err(429, "too_many_attempts", "Too many attempts. Try again later.", undefined, {
       "Retry-After": String(Math.ceil(gate.retryAfterMs / 1000)),
@@ -89,7 +89,6 @@ export async function handleLogin(request: Request, deps: OwnerDeps): Promise<Re
   const body = await readJson(request, MAX_LOGIN_BODY);
   const ok = body !== null && verifyOwnerPassphrase(body.passphrase, deps.env);
   if (!ok) {
-    deps.limiter.recordFailure(key);
     await sleep(600 + Math.floor(random() * 400)); // constant-ish delay on failure
     return err(401, "invalid_credentials", "That did not work.");
   }
@@ -100,7 +99,7 @@ export async function handleLogin(request: Request, deps: OwnerDeps): Promise<Re
   } catch {
     return err(503, "not_configured", "Sign-in is not configured on the server.");
   }
-  deps.limiter.recordSuccess(key);
+  await deps.limiter.recordSuccess(key);
   return json(200, { ok: true }, { "Set-Cookie": sessionCookie(token, isSecureEnv(deps.env)) });
 }
 

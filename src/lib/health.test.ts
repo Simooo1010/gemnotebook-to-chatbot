@@ -37,4 +37,19 @@ describe("buildHealthReport", () => {
     expect(buildHealthReport({ OWNER_PASSPHRASE_HASH: "h" }, "x").ownerPassphrase).toBe(true);
     expect(buildHealthReport({ OWNER_PASSPHRASE: "  " }, "x").ownerPassphrase).toBe(false);
   });
+
+  it("reports key resolvability from explicit variables or a long MASTER_SECRET, as booleans only", () => {
+    const master = "m".repeat(32);
+    expect(buildHealthReport({}, "x").keys).toEqual({ vault: false, signing: false });
+    const viaMaster = buildHealthReport({ MASTER_SECRET: master }, "x");
+    expect(viaMaster.keys).toEqual({ vault: true, signing: true });
+    expect(viaMaster.env.MASTER_SECRET).toBe(true);
+    expect(JSON.stringify(viaMaster)).not.toContain(master);
+    expect(buildHealthReport({ MASTER_SECRET: "m".repeat(31) }, "x").keys).toEqual({ vault: false, signing: false });
+    expect(buildHealthReport({ VAULT_ENCRYPTION_KEY: "k", VAULT_KEY_VERSION: "1", OAUTH_SIGNING_KEY: "s".repeat(32) }, "x").keys).toEqual({
+      vault: true,
+      signing: true,
+    });
+    expect(buildHealthReport({ VAULT_ENCRYPTION_KEY: "k", MASTER_SECRET: master }, "x").keys.vault).toBe(false);
+  });
 });

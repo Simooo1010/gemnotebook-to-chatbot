@@ -4,6 +4,7 @@
 // The token holds ids only: never a Google URL, cookie or secret. It is a bearer capability: anyone holding the link can
 // download that one file until it expires.
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { resolveSigningSecret } from "@/lib/vault/derive";
 
 type Env = Record<string, string | undefined>;
 
@@ -26,14 +27,14 @@ export interface MediaClaims {
 /** Configuration problem. Names the variable only, never a value. */
 export class MediaLinkConfigError extends Error {
   constructor() {
-    super("OAUTH_SIGNING_KEY must be set to at least 32 bytes");
+    super("OAUTH_SIGNING_KEY (or MASTER_SECRET of at least 32 characters) must be set");
     this.name = "MediaLinkConfigError";
   }
 }
 
 /** Key for media links. Throws MediaLinkConfigError when the signing key is missing or short (fail closed). */
 export function deriveMediaKey(env: Env, context: string = MEDIA_LINK_CONTEXT): Buffer {
-  const raw = env.OAUTH_SIGNING_KEY;
+  const raw = resolveSigningSecret(env);
   if (typeof raw !== "string" || Buffer.byteLength(raw, "utf8") < MIN_KEY_BYTES) throw new MediaLinkConfigError();
   return createHmac("sha256", Buffer.from(raw, "utf8")).update(context, "utf8").digest();
 }

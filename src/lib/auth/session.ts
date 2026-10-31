@@ -1,6 +1,7 @@
 // Owner session: HMAC-signed token in an HttpOnly cookie, plus same-origin (CSRF) check.
 // Pure except node:crypto; the clock is injectable.
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { resolveSigningSecret } from "@/lib/vault/derive";
 
 type Env = Record<string, string | undefined>;
 
@@ -11,13 +12,13 @@ const CONTEXT = "owner-session";
 /** Configuration problem. Names the variable only, never a value. */
 export class SessionConfigError extends Error {
   constructor() {
-    super("OAUTH_SIGNING_KEY must be set to at least 32 bytes");
+    super("OAUTH_SIGNING_KEY (or MASTER_SECRET of at least 32 characters) must be set");
     this.name = "SessionConfigError";
   }
 }
 
 function derivedKey(env: Env): Buffer {
-  const raw = env.OAUTH_SIGNING_KEY;
+  const raw = resolveSigningSecret(env);
   if (typeof raw !== "string" || Buffer.byteLength(raw, "utf8") < MIN_KEY_BYTES) throw new SessionConfigError();
   // Domain separation: the owner-session key is never the raw OAuth signing key.
   return createHmac("sha256", Buffer.from(raw, "utf8")).update(CONTEXT, "utf8").digest();

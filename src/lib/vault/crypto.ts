@@ -1,5 +1,6 @@
 // AES-256-GCM sealing of per-account secrets. Pure: no I/O, no logging.
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { deriveKey, masterSecret, MasterSecretError } from "./derive";
 
 export const ENVELOPE_VERSION = 1;
 const KEY_BYTES = 32;
@@ -46,12 +47,18 @@ function decodeKey(b64: unknown, label: string): Buffer {
   return key;
 }
 
+/**
+ * Explicit VAULT_ENCRYPTION_KEY (+ VAULT_KEY_VERSION, required) wins. Otherwise, when MASTER_SECRET is set, the vault key is
+ * derived from it (version defaults to "1"). Otherwise fail closed.
+ */
 export function loadKeyring(env: Record<string, string | undefined>): Keyring {
-  const version = env.VAULT_KEY_VERSION?.trim();
+  const explicit = typeof env.VAULT_ENCRYPTION_KEY === "string" && env.VAULT_ENCRYPTION_KEY.trim().length > 0;
+  const master = explicit ? undefined : masterSecret(env);
+  const version = env.VAULT_KEY_VERSION?.trim() || (master !== undefined ? "1" : undefined);
   if (!version || !VERSION_RE.test(version)) {
     throw new KeyringConfigError("VAULT_KEY_VERSION must be an integer string");
   }
-  if (!env.VAULT_ENCRYPTION_KEY) throw new KeyringConfigError("VAULT_ENCRYPTION_KEY is not set");
+  if (!explicit && master === undefined) throw new KeyringConfigError("VAULT_ENCRYPTION_KEY is not set");
   const keys = new Map<string, Buffer>();
   const prev = env.VAULT_PREVIOUS_KEYS?.trim();
   if (prev) {
@@ -69,7 +76,16 @@ export function loadKeyring(env: Record<string, string | undefined>): Keyring {
       keys.set(v, decodeKey(k, `VAULT_PREVIOUS_KEYS[${v}]`));
     }
   }
-  keys.set(version, decodeKey(env.VAULT_ENCRYPTION_KEY, "VAULT_ENCRYPTION_KEY"));
+  if (master !== undefined) {
+    try {
+      keys.set(version, deriveKey(master, "vault", 32));
+    } catch (e) {
+      if (e instanceof MasterSecretError) throw new KeyringConfigError(e.message);
+      throw new KeyringConfigError("MASTER_SECRET could not be used");
+    }
+  } else {
+    keys.set(version, decodeKey(env.VAULT_ENCRYPTION_KEY, "VAULT_ENCRYPTION_KEY"));
+  }
   return { currentVersion: version, keys };
 }
 

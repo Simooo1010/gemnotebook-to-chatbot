@@ -24,6 +24,8 @@ export interface Db {
   update(table: string, match: Row, patch: Row): Promise<number>;
   upsert(table: string, row: Row, onConflict: string): Promise<void>;
   delete(table: string, match: Row): Promise<void>;
+  /** Optional: delete rows whose `column` is strictly before `isoTime` (and equal to `match`, if given). Used for pruning. */
+  deleteBefore?(table: string, column: string, isoTime: string, match?: Row): Promise<void>;
 }
 
 /** Generic on purpose: the underlying error (which may echo queries or values) is never propagated. */
@@ -66,6 +68,12 @@ export function dbFromSupabase(sb: Pick<SupabaseClient, "from">): Db {
     },
     async delete(table, match) {
       let q = sb.from(table).delete();
+      for (const [k, v] of Object.entries(match)) q = q.eq(k, v as string);
+      const { error } = await q;
+      if (error) fail();
+    },
+    async deleteBefore(table, column, isoTime, match = {}) {
+      let q = sb.from(table).delete().lt(column, isoTime);
       for (const [k, v] of Object.entries(match)) q = q.eq(k, v as string);
       const { error } = await q;
       if (error) fail();

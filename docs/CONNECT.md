@@ -36,7 +36,7 @@ Tools: `studio_audio_create`, `studio_video_create`, `studio_status`, `studio_do
 
 Limits: free Google accounts only get a few audio and video overviews per day. This connector also keeps its own daily limit per account (default 2 audio and 2 video per UTC day). When a limit is reached nothing is started and nothing is retried; try again tomorrow. A failed overview is not retried either (starting a new one counts again). If a start request gives an unclear answer, Claude checks `studio_status` before starting another one, so you do not get duplicates.
 
-The link needs `PUBLIC_BASE_URL` and `OAUTH_SIGNING_KEY` to be set on the server (see `SETUP-FOR-OWNER.md`). The media address never contains Google cookies or Google file addresses.
+The link needs `PUBLIC_BASE_URL` and `MASTER_SECRET` (or `OAUTH_SIGNING_KEY`) to be set on the server (see `SETUP-FOR-OWNER.md`). The media address never contains Google cookies or Google file addresses.
 
 ## Asking questions with citations (Step 7)
 
@@ -48,6 +48,17 @@ Tool: `chat_ask`. In plain words:
 4. To ask a follow-up in the same conversation ("and what about kittens?"), Claude passes along the conversation id from the first answer. Starting a completely fresh conversation is not supported yet.
 
 Limits: free Google accounts only get a limited number of chat questions per day. This connector also keeps its own daily limit per account (default 30 per UTC day). When a limit is reached nothing is sent and nothing is retried; try again tomorrow. If an answer is very long, it is cut and Claude is told so (ask a narrower question). If a request gives an unclear answer, Claude may retry once at most. Your questions and the answers are not stored or logged by this connector; the chat itself shows up in the notebook's chat history in NotebookLM.
+
+## Keeping Google sessions alive (Step 8a)
+
+Google sessions expire if nobody uses them. The route `/api/cron/keepalive` refreshes every **active** account one after another (with the usual pauses, stopping after about 50 seconds and reporting how many accounts it had to skip). It answers only counts and a status per account id: never cookies or names.
+
+It is protected by `CRON_SECRET`: the request must carry `Authorization: Bearer <CRON_SECRET>`. If `CRON_SECRET` is not set on the server the route answers 503 and does nothing. Two callers are set up in the repo:
+
+1. **Vercel Cron (automatic).** `vercel.json` schedules one call per day. Vercel sends the bearer header by itself from the `CRON_SECRET` environment variable. Nothing to do besides setting that variable. (A daily refresh alone is a safety net, not enough to keep a session warm.)
+2. **GitHub Actions every 15 minutes (optional, recommended).** The workflow `.github/workflows/keepalive.yml` calls the route with curl. In the GitHub repository open **Settings → Secrets and variables → Actions**: add the **variable** `APP_URL` (your https production address, no trailing slash) and the **secret** `CRON_SECRET` (the same value as on Vercel). While either is empty the job is skipped.
+
+A deeper check is `GET /api/health/deep` (same bearer header). For each active account it does one small read of the notebook list and answers only `ok`, `needs_reauth`, `region_gate`, `drift`, `quota` or `error` per account id. Notebook names are never included. Use it to see whether a session is still alive without opening Claude.
 
 ## Revoke access
 

@@ -79,6 +79,16 @@ export function createLoginLimiter(opts: LimiterOptions = {}) {
   };
 
   return {
+    /**
+     * Register an attempt BEFORE the passphrase is verified (so a burst of parallel guesses is still counted) and decide.
+     * Counted as a failure; `recordSuccess` clears it. Same lock-out outcome as check + recordFailure.
+     */
+    attempt(k: string): LimitDecision {
+      const d = this.check(k);
+      if (!d.allowed) return d;
+      this.recordFailure(k);
+      return { allowed: true, retryAfterMs: 0 };
+    },
     check(k: string): LimitDecision {
       const s = get(k);
       const left = s.lockedUntil - now();
