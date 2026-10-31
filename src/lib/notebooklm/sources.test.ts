@@ -335,6 +335,33 @@ describe("addSourceYoutube / addSourceText / addSourceDrive", () => {
     expect(await t2.ops.addSourceDrive(ACC, NB, file)).toMatchObject({ sourceId: uuid(41), reconciled: true });
   });
 
+  it("T3-6 drive: Google retitles Drive adds, so an ambiguous add is reconciled by type + created time (+ file id), not title", async () => {
+    const file = { fileId: "1AbCdEfGhIjKlMnOpQr", mimeType: "application/vnd.google-apps.document" as const, title: "VCR Test Drive Doc" };
+    const retitled = "Rubisco Research: Status and Future"; // real behavior (notebooklm-py sources_add_drive.yaml)
+    const t = setup([
+      boom(new AmbiguousMutationError("izAoDd", "timeout")),
+      () => notebookResult([srcRow(50, "Older doc", { type: 1, created: NOW_SEC - 86400 }), srcRow(51, retitled, { type: 1, created: NOW_SEC - 3 })]),
+    ]);
+    expect(await t.ops.addSourceDrive(ACC, NB, file)).toMatchObject({ sourceId: uuid(51), title: retitled, reconciled: true });
+    // a row that links another Drive file is not ours; one with our file id is
+    const other = setup([
+      boom(new AmbiguousMutationError("izAoDd", "timeout")),
+      () => notebookResult([srcRow(52, retitled, { type: 1, created: NOW_SEC - 3, url: "https://docs.google.com/document/d/ZZZZZZZZZZZZZZZZZZZZ/edit" })]),
+    ]);
+    await expect(other.ops.addSourceDrive(ACC, NB, file)).rejects.toBeInstanceOf(SourceAddUnconfirmedError);
+    const mine = setup([
+      boom(new AmbiguousMutationError("izAoDd", "timeout")),
+      () => notebookResult([srcRow(53, retitled, { type: 1, created: NOW_SEC - 3, url: `https://docs.google.com/document/d/${file.fileId}/edit` })]),
+    ]);
+    expect(await mine.ops.addSourceDrive(ACC, NB, file)).toMatchObject({ sourceId: uuid(53), reconciled: true });
+    // two new Drive rows in the window: ambiguous, never a guess
+    const two = setup([
+      boom(new AmbiguousMutationError("izAoDd", "timeout")),
+      () => notebookResult([srcRow(54, "A", { type: 1, created: NOW_SEC - 3 }), srcRow(55, "B", { type: 1, created: NOW_SEC - 2 })]),
+    ]);
+    await expect(two.ops.addSourceDrive(ACC, NB, file)).rejects.toBeInstanceOf(SourceAddAmbiguousError);
+  });
+
   it("rejects non-uuid notebook ids for every add", async () => {
     const t = setup([]);
     await expect(t.ops.addSourceText(ACC, "x", "t", "c")).rejects.toBeInstanceOf(ZodError);

@@ -169,6 +169,12 @@ export function sameUrl(a: string, b: string): boolean {
   return ya !== null && ya === youtubeKey(b);
 }
 
+/** True when the row has no Drive link to compare, or its link carries this file id. */
+function driveIdMatches(url: string | null, fileId: string): boolean {
+  if (url === null || !/drive\.google\.com|docs\.google\.com/.test(url)) return true;
+  return url.includes(fileId);
+}
+
 const DRIVE_TYPES = new Set(["google_docs", "google_slides", "google_sheet", "pdf", "drive", "unknown"]);
 
 interface Attempt {
@@ -337,7 +343,10 @@ export function createSourceOps(deps: SourceOpsDeps) {
       notebookId: nb,
       tool: "source_add_drive",
       attempts: [{ label: "primary", name: "ADD_SOURCE", params: addSourceDriveParams(nb, file) }],
-      match: (s) => s.title === file.title && DRIVE_TYPES.has(s.type),
+      // Google retitles Drive adds (real capture: sent "VCR Test Drive Doc", stored a Google-derived title), so the
+      // title is useless here: match by source type + created time (reconcile's window) and, when the stored row
+      // exposes a Drive link, the file id.
+      match: (s) => DRIVE_TYPES.has(s.type) && driveIdMatches(s.url, file.fileId),
       fallbackTitle: file.title,
     });
   }
