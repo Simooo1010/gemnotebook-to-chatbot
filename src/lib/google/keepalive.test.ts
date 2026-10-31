@@ -3,7 +3,7 @@ import { loadKeyring } from "@/lib/vault/crypto";
 import { MemoryAccountRepo, MemorySessionVault } from "@/lib/vault/memory";
 import { createVault } from "@/lib/vault/vault";
 import { ROTATE_BODY, createRotationLimiter, keepAliveAccount, rotateCookies } from "./keepalive";
-import { SYN_SID, fakeClock, res, scriptedFetch, synthJar } from "./testing";
+import { SYN_SID, fakeClock, homepageHtml, res, scriptedFetch, synthJar } from "./testing";
 
 const keyring = loadKeyring({ VAULT_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString("base64"), VAULT_KEY_VERSION: "1" });
 const rawExport = synthJar().cookies;
@@ -50,18 +50,58 @@ describe("keepAliveAccount", () => {
     expect(jar.cookies.find((c) => c.name === "SIDCC")!.value).toBe("rot9");
     expect(jar.cookies.find((c) => c.name === "SID")!.value).toBe(SYN_SID);
   });
-  it("marks needs_reauth on auth failure, without retry", async () => {
+  const probe = { base: "https://notebooklm.google.com" };
+  async function run(handlers: Parameters<typeof scriptedFetch>[0], withProbe = true) {
     const { accounts, vault } = setup();
     const { account } = await vault.connectAccount("Synthetic", rawExport);
-    const { fetch, calls } = scriptedFetch([() => res(401)]);
-    expect(await keepAliveAccount(vault, account.id, { fetch, accounts, limiter: createRotationLimiter() })).toBe("needs_reauth");
-    expect(calls).toHaveLength(1);
-    expect((await accounts.get(account.id))!.status).toBe("needs_reauth");
+    const { fetch, calls } = scriptedFetch(handlers);
+    const out = await keepAliveAccount(vault, account.id, { fetch, accounts, limiter: createRotationLimiter(), probe: withProbe ? probe : undefined });
+    return { out, calls, status: (await accounts.get(account.id))!.status };
+  }
+  it("403 + probe ok → error, account stays active, no retry of RotateCookies", async () => {
+    const r = await run([() => res(403), () => res(200, { body: homepageHtml() })]);
+    expect(r).toMatchObject({ out: "error", status: "active" });
+    expect(r.calls.filter((c) => c.url.includes("RotateCookies"))).toHaveLength(1);
+    expect(r.calls[1]!.init.method).toBe("GET");
+  });
+  it("403 + probe signed_out → needs_reauth", async () => {
+    const r = await run([() => res(403), () => res(302, { location: "https://accounts.google.com/ServiceLogin?continue=x" }), () => res(200)]);
+    expect(r).toMatchObject({ out: "needs_reauth", status: "needs_reauth" });
+  });
+  it("401 + probe cookie_mismatch → needs_reauth", async () => {
+    const r = await run([() => res(401), () => res(302, { location: "https://accounts.google.com/CookieMismatch" }), () => res(200)]);
+    expect(r).toMatchObject({ out: "needs_reauth", status: "needs_reauth" });
+  });
+  it("403 + probe region gate → error, never flagged", async () => {
+    const r = await run([() => res(403), () => res(302, { location: "https://notebooklm.google/?location=unsupported" }), () => res(200)]);
+    expect(r).toMatchObject({ out: "error", status: "active" });
+  });
+  it("403 + probe network error → error, never flagged", async () => {
+    const r = await run([() => res(403), () => { throw new TypeError("fetch failed"); }]);
+    expect(r).toMatchObject({ out: "error", status: "active" });
+  });
+  it("403 without a probe configured → error, never flagged", async () => {
+    const r = await run([() => res(403)], false);
+    expect(r).toMatchObject({ out: "error", status: "active" });
+  });
+  it("5xx → error, never flagged, no probe", async () => {
+    const r = await run([() => res(503)]);
+    expect(r).toMatchObject({ out: "error", status: "active" });
+    expect(r.calls).toHaveLength(1);
+  });
+  it("network error on RotateCookies → error, never flagged", async () => {
+    const r = await run([() => { throw new TypeError("fetch failed"); }]);
+    expect(r).toMatchObject({ out: "error", status: "active" });
+  });
+  it("redirect to a non-Google sign-in-looking path is not evidence → no flag", async () => {
+    const r = await run([() => res(302, { location: "https://proxy.example.com/signin" }), () => res(200)]);
+    expect(r.status).toBe("active");
   });
   it("redirect to sign-in also means needs_reauth", async () => {
     const { accounts, vault } = setup();
     const { account } = await vault.connectAccount("Synthetic", rawExport);
     const { fetch } = scriptedFetch([() => res(302, { location: "https://accounts.google.com/ServiceLogin" }), () => res(200)]);
     expect(await keepAliveAccount(vault, account.id, { fetch, accounts, limiter: createRotationLimiter() })).toBe("needs_reauth");
+    expect((await accounts.get(account.id))!.status).toBe("needs_reauth");
   });
 });

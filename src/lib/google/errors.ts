@@ -73,7 +73,11 @@ export class UnknownHomepageError extends HomepageError {
 
 export class RotateAuthError extends GoogleTransportError {
   override readonly kind = "rotate_auth";
-  constructor(readonly status: number) {
+  /** signInRedirect = positive evidence of a signed-out session; a bare 401/403 is not (may be an intermediary). */
+  constructor(
+    readonly status: number,
+    readonly signInRedirect = false,
+  ) {
     super(`RotateCookies rejected the session (HTTP ${status})`);
   }
 }

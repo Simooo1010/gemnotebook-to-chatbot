@@ -1,5 +1,5 @@
 // Production wiring for the cron/health routes (server only). Built lazily per request from the cached runtime.
-import { getRuntime } from "@/lib/runtime";
+import { getRuntime, resolveNotebookBaseUrl } from "@/lib/runtime";
 import type { DeepHealthDeps } from "./deep-health";
 import type { SweepDeps } from "./keepalive";
 
@@ -11,6 +11,7 @@ export function keepAliveDeps(): SweepDeps {
     fetch: rt.fetch,
     limiter: rt.rotationLimiter,
     throttle: rt.throttle,
+    probeBase: resolveNotebookBaseUrl(process.env),
   };
 }
 

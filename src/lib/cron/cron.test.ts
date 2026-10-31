@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { AccountNeedsReauthError, CooldownActiveError, RegionGateError } from "@/lib/google/errors";
 import { createRotationLimiter } from "@/lib/google/keepalive";
 import { createThrottle } from "@/lib/google/throttle";
-import { fakeClock, res, scriptedFetch, synthJar, SYN_SID } from "@/lib/google/testing";
+import { fakeClock, homepageHtml, res, scriptedFetch, synthJar, SYN_SID } from "@/lib/google/testing";
 import { RpcAuthError, RpcDriftError, RpcQuotaError } from "@/lib/rpc/errors";
 import type { Account } from "@/lib/vault/storage";
 import { authorizeCron } from "./auth";
@@ -92,10 +92,16 @@ describe("runKeepAliveSweep", () => {
     expect(r.results.map((x) => x.id)).toEqual(["acc-1", "acc-2", "acc-3", "acc-4"].slice(0, r.processed));
   });
 
-  it("a 401 from RotateCookies marks needs_reauth and a failing account does not stop the others", async () => {
+  it("a 401 confirmed signed-out by the probe marks needs_reauth; a 403 with a live probe stays active (error); a failing account does not stop the others", async () => {
     const clock = fakeClock();
-    const accounts = [acct(1), acct(2)];
-    const { fetch } = scriptedFetch([() => res(401), () => res(200)]);
+    const accounts = [acct(1), acct(2), acct(3)];
+    const { fetch } = scriptedFetch([
+      () => res(401),
+      () => res(200, { body: '<a class="landing-header-signin">Sign in</a>' }),
+      () => res(403),
+      () => res(200, { body: homepageHtml() }),
+      () => res(200),
+    ]);
     const statuses: string[] = [];
     const r = await runKeepAliveSweep({
       vault: { listAccounts: async () => accounts, getJar: async () => synthJar(), updateJar: async () => undefined },
@@ -106,10 +112,12 @@ describe("runKeepAliveSweep", () => {
       now: clock.now,
       sleep: clock.sleep,
       random: () => 0,
+      probeBase: "https://notebooklm.google.com",
     });
     expect(r.results).toEqual([
       { id: "acc-1", status: "needs_reauth" },
-      { id: "acc-2", status: "rotated" },
+      { id: "acc-2", status: "error" },
+      { id: "acc-3", status: "rotated" },
     ]);
     expect(statuses).toEqual(["acc-1:needs_reauth"]);
   });

@@ -32,6 +32,8 @@ export interface SweepDeps {
   /** Returns [0,1). */
   random?: () => number;
   budgetMs?: number;
+  /** NotebookLM origin for the confirming probe after a 401/403 from RotateCookies. */
+  probeBase?: string;
 }
 
 export async function runKeepAliveSweep(d: SweepDeps): Promise<SweepResult> {
@@ -62,6 +64,7 @@ export async function runKeepAliveSweep(d: SweepDeps): Promise<SweepResult> {
           limiter: d.limiter,
           now,
           timeoutMs: Math.min(MAX_ROTATE_TIMEOUT_MS, remaining - 1_000),
+          probe: d.probeBase ? { base: d.probeBase } : undefined,
         }),
       );
       status = outcome;

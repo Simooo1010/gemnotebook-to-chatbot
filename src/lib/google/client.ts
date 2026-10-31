@@ -149,8 +149,8 @@ export function createGoogleClient(deps: GoogleClientDeps) {
     try {
       j = (await rotateCookies({ fetch: deps.fetch, jar: j, accountId, limiter, now })).jar;
     } catch (e) {
-      if (e instanceof RotateAuthError) return markReauth(accountId);
-      // Rotation is best-effort; the token fetch below decides whether the session is alive.
+      if (e instanceof RotateAuthError && e.signInRedirect) return markReauth(accountId);
+      // Rotation is best-effort (a bare 401/403 may come from an intermediary); the token fetch below decides.
     }
     try {
       const r = await fetchPageTokens({ fetch: deps.fetch, jar: j, base, authuser: deps.config.authuser, now });
