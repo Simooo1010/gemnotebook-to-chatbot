@@ -176,7 +176,10 @@ export function cookieHeaderFor(jar: CookieJar, url: string, nowMs: number = Dat
 /** Cookies that must never be re-scoped onto download hosts (reference CLI deletes them before downloads). */
 const MEDIA_EXCLUDED_NAMES = new Set(["OSID", "__Secure-OSID"]);
 
-const isGoogleusercontentHost = (host: string) => host === "googleusercontent.com" || host.endsWith(".googleusercontent.com");
+// Only Google's image/media CDN hosts (lh3.googleusercontent.com and siblings) receive the re-scoped session cookies.
+// Other *.googleusercontent.com subdomains serve third-party-controlled content (e.g. Apps Script web apps at
+// *-script.googleusercontent.com): session cookies must never reach them, even if a redirect chain pointed there.
+const isGoogleusercontentHost = (host: string) => /^lh\d+(-[a-z0-9]+)*\.googleusercontent\.com$/.test(host);
 
 /**
  * MEDIA-ONLY cookie header (never stored, never used for RPC/page requests).

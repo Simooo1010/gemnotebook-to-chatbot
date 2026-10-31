@@ -54,7 +54,7 @@ Honest baseline: this is reverse-engineered access, so Google can change it or f
 | Account flagging from bursty/robotic traffic | One request at a time per account; 1.5–4 s random gap between RPCs; polling ≥ 15 s; no auto-retry of mutations; backoff on 429/quota; self-imposed daily caps per account below Google's (default audio 2, video 2, chat 30; configurable). Stable browser-like UA and headers per account. |
 | Datacenter-IP / fingerprint gate (`location=unsupported`) | Detected and reported as its own error (never retried in a loop). **Go/no-go checkpoint in Step 3.** Plan B if Vercel IPs are gated: keep the same code but run the Google-facing worker where the owner chooses (e.g. a home machine behind a tunnel). Decide with evidence, not before. |
 | Session superseded by a second client | Import from a private window and close it without signing out; never run two consumers on one jar; one keep-alive owner per account. |
-| Session expiry | Keep-alive `RotateCookies` every ~10–15 min per account via Supabase `pg_cron` → `/api/cron/keepalive` (secret header), plus lazy rotation before use. Expiry detected (redirect to accounts.google.com, no `SNlM0e`, gRPC 16) → account marked `needs_reauth`, tools return a clear message, no retries. |
+| Session expiry | Keep-alive `RotateCookies` per account via the Vercel cron (daily, Hobby limit) plus an optional GitHub Actions workflow every 15 min → `/api/cron/keepalive` (Bearer `CRON_SECRET`; answers 503 when any account failed), plus lazy rotation before use. Expiry detected (redirect to accounts.google.com, no `SNlM0e`, gRPC 16) → account marked `needs_reauth`, tools return a clear message, no retries. |
 | Stolen cookies | AES-256-GCM at rest, key only in env (versioned for rotation); decrypted in memory per call only; never logged, never returned by any tool, never sent to the client. RLS on, service key server-side only. Audit log holds no secrets. |
 | Compromised connector token | OAuth tokens short-lived with refresh; owner passphrase gates approval; per-account **kill switch** (disable + wipe session) on the vault page; revoke-all button. |
 | Claude misused or prompt-injected through source content | Tool results are plain data; no tool can read cookies, change settings or delete; writes limited to the allow-list in `created_objects`; add-source/chat rate-limited. |
@@ -80,7 +80,7 @@ Each step is shippable and testable alone, ordered by the critical path (budget 
 5. **Step 5 — Sources:** add URL/YouTube/text/Drive, status wait, text and guide, summary. Check: add a URL, see it appear in the native UI.
 6. **Step 6 — Audio and video overviews + downloads:** create with all v1 options, status, signed download proxy, daily caps. Check: audio and video appear natively in the notebook and the link plays on the phone.
 7. **Step 7 — Chat with citations:** `chat_ask` with source citations. Check: answer and citations match the native chat.
-8. **Step 8 — Hardening and release:** `pg_cron` keep-alive, health check, revoke-all, optional one-click Chrome extension, docs. Gates 3, 4, 5, then production merge, then hand-off with the connector URL.
+8. **Step 8 — Hardening and release:** keep-alive (Vercel cron + GitHub Actions), health check, revoke-all, optional one-click Chrome extension, docs. Gates 3, 4, 5, then production merge, then hand-off with the connector URL.
 9. **Step 9 — Stretch (only if time/credits remain):** file-upload sources (Scotty).
 
 ## 6b. Final manual run (owner does everything manual in one batch at the end)
@@ -101,3 +101,4 @@ Claude builds and verifies everything it can without the owner: code, tests, sto
 | 2026-10-30 | Owner passphrase may be supplied as plain env OWNER_PASSPHRASE (compared in constant time) or as scrypt OWNER_PASSPHRASE_HASH; Claude-proposed, owner-informed | Claude, informed to Simooo1010 | 3 |
 | 2026-10-30 | Additive writes allowed on any notebook; rename restricted; no deletes (interpretation of CLAUDE.md write rule) | Claude, informed to Simooo1010 | 5 |
 | 2026-10-30 | All owner-manual actions (Supabase project, passphrase, Google import, connector, live checks) move to one final batch; earlier steps use storage adapters + fixtures | Simooo1010 | 6, 6b |
+| 2026-10-31 | SPEC: keep-alive via Vercel cron daily + optional GitHub Actions 15-min instead of pg_cron | Claude, informed to Simooo1010 | 4 |

@@ -99,3 +99,10 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
   - T3-9 fixed: chat response cap 2 MiB -> 8 MiB (configurable).
   - T3-11 fixed: no empty `bl=`; RotateCookies sends the browser UA.
   - NOT fixed, by decision: T3-10 (follow-up `history=null`, no real follow-up capture; `it.todo`), and the SID/cookie question (owner's live run decides).
+- **Platform requirement (T5-6):** `/api/mcp` and `/api/media/[token]` now declare `maxDuration = 300`. This needs Vercel **Fluid Compute** (Hobby maximum 300 s; on by default for projects created after 2025-04-23, confirm under Project -> Settings -> Functions). If a deployment fails because of this value, revert the two lines.
+- **Fix loop A (platform, from tester 5):**
+  - T5-2 fixed: keep-alive and deep health answer 503 (statuses only) when any account is error/needs_reauth; workflow uses `--max-time 60`, logs the HTTP status, fails on non-2xx.
+  - T5-6 fixed: `maxDuration = 300` on `/api/mcp` and `/api/media/[token]` (needs Fluid Compute, see note above).
+  - T5-13 fixed: vault list has `sessionReadable`; /vault shows 'Session unreadable - re-import this account'; keep-alive reports `error` + reason `unreadable_session`.
+  - T5-11 fixed (docs): production-only secrets and testing, CONNECT status, SPEC §4 keep-alive text + decision-log row, SETUP g notes (APP_URL / CRON_SECRET, 60-day rule, default branch).
+  - Not in this PR: T5-1 (owner: set GitHub default branch to `main`), T5-3/4/5/7/12 (other fixer).

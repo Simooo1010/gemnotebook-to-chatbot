@@ -27,7 +27,11 @@ export async function handleKeepAlive(request: Request, c: CronHandlerDeps<Sweep
     return unavailable();
   }
   try {
-    return Response.json(await runKeepAliveSweep(deps), { headers });
+    const result = await runKeepAliveSweep(deps);
+    // 503 when any account failed (error / needs_reauth) so the scheduled job turns red and the owner is told.
+    // Legitimate skips (rotation limiter, quota cooldown, exhausted budget) stay 200. Body = ids and statuses only.
+    const failed = result.results.some((r) => r.status === "error" || r.status === "needs_reauth");
+    return Response.json(result, { status: failed ? 503 : 200, headers });
   } catch {
     return Response.json({ error: "keep-alive failed" }, { status: 500, headers });
   }
@@ -43,7 +47,10 @@ export async function handleDeepHealth(request: Request, c: CronHandlerDeps<Deep
     return unavailable();
   }
   try {
-    return Response.json(await runDeepHealth(deps), { headers });
+    const result = await runDeepHealth(deps);
+    // Same rule as keep-alive: a failing account must not hide behind a 200 ("quota" is a legitimate back-off, not a failure).
+    const failed = result.accounts.some((a) => a.status !== "ok" && a.status !== "quota");
+    return Response.json(result, { status: failed ? 503 : 200, headers });
   } catch {
     return Response.json({ error: "health check failed" }, { status: 500, headers });
   }

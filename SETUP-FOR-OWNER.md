@@ -9,7 +9,7 @@ Written for a phone. Do the steps in order. Never paste a secret into chat: you 
 
 ## b. Vercel environment variables (only these four are left, by you)
 I deliberately did not create these: they are secrets, and creating them would put their values into this chat.
-Vercel → your project → Settings → Environment Variables → Add. Choose **Production and Preview**, and mark each one **Sensitive**.
+Vercel → your project → Settings → Environment Variables → Add. Choose **Production only** (untick Preview and Development) and mark each one **Sensitive**. Preview deployments are not functional on purpose: they have no service key and are protected by Vercel login, so all testing happens on the production address.
 
 | Name | Value |
 |---|---|
@@ -47,6 +47,10 @@ Google sessions expire if unused. GitHub repository → Settings → Secrets and
 - **Variables** tab: add `APP_URL` = your production address (no trailing slash).
 - **Secrets** tab: add `CRON_SECRET` = the same value as on Vercel.
 Then Actions → keepalive → Run workflow once to test. Without this, only the daily Vercel job refreshes sessions.
+- The workflow needs the repository **variable** `APP_URL` and the repository **secret** `CRON_SECRET`; while either is empty the job is skipped.
+- The workflow only appears and only runs on the repository's **default branch** (Settings → General → Default branch must be `main`).
+- The run turns red (and GitHub emails you) when any account needs a new import; open the vault page to see which.
+- GitHub **disables scheduled workflows in public repositories after 60 days without repository activity**. If the keep-alive stops, open Actions → keepalive → Enable workflow (any commit also resets the timer).
 
 ## h. Confirm one dependency
 Confirm that `@modelcontextprotocol/server` 2.4.0 may stay installed. It is not on the approved list, but `mcp-handler` requires it as a peer dependency (our code never imports it directly). Tell Claude yes or no.

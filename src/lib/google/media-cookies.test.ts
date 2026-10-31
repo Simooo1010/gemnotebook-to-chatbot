@@ -28,6 +28,19 @@ describe("mediaCookieHeaderFor (media-only view)", () => {
     expect(h).toContain("APISID=SYN_API");
     for (const bad of ["OSID", "__Secure-OSID", "HOSTONLY", "EXPIRED", "PATHED"]) expect(h).not.toContain(`${bad}=`);
   });
+  it("session cookies are NOT re-scoped onto other *.googleusercontent.com hosts (third-party-controlled content such as Apps Script apps)", () => {
+    for (const u of [
+      "https://n-abc123-script.googleusercontent.com/x",
+      "https://docs.googleusercontent.com/x",
+      "https://sites.googleusercontent.com/x",
+      "https://googleusercontent.com/x",
+    ])
+      expect(mediaCookieHeaderFor(jarWith(), u, Date.now())).toBe("");
+  });
+  it("the CDN hosts that serve media (lh3, lh4-…, lh3-rw) do get the media-only view", () => {
+    for (const u of ["https://lh3.googleusercontent.com/x", "https://lh4.googleusercontent.com/x", "https://lh3-rw.googleusercontent.com/x"])
+      expect(mediaCookieHeaderFor(jarWith(), u, Date.now())).not.toBe("");
+  });
   it("a genuine googleusercontent cookie is kept and wins a name clash", () => {
     const j = jarWith();
     j.cookies.push({ name: "SID", value: "GENUINE", domain: ".googleusercontent.com", path: "/", secure: true, httpOnly: true });
