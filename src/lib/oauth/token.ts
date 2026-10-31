@@ -2,6 +2,7 @@
 import { randomB64u, sha256hex, verifyPkce } from "./crypto";
 import { ACCESS_TTL_MS, OAuthError, REFRESH_TTL_MS, type OAuthDeps } from "./deps";
 import { mcpResourceUrl } from "./metadata";
+import type { TokenRecord } from "./store";
 
 type Params = { get(name: string): string | null };
 
@@ -13,7 +14,34 @@ export interface TokenResponse {
   scope: string;
 }
 
+/**
+ * A refresh token that was already rotated may be presented again by the same client inside this window (network retry,
+ * two workers refreshing at once). That is NOT treated as theft: it gets a fresh pair in the same family (both pairs stay
+ * valid). Reuse after the window revokes the whole family.
+ */
+export const REFRESH_GRACE_MS = 20_000;
+
 const invalidGrant = (d: string) => new OAuthError("invalid_grant", d);
+
+/**
+ * Revokes a family so that the revocation also wins against an issuance in flight: the tombstone is written FIRST (a
+ * concurrent `issueChecked` that finishes later sees it and revokes its own rows), then every live row is revoked
+ * (a concurrent issuance that finished earlier is caught by that second step).
+ */
+async function killFamily(deps: OAuthDeps, familyId: string, clientId: string, at: Date): Promise<void> {
+  await deps.store.tokens.tombstoneFamily(familyId, clientId, at);
+  await deps.store.tokens.revokeFamily(familyId, at);
+}
+
+/** Issues a pair, then re-checks that the family was not revoked meanwhile; if it was, the new rows are revoked and the grant fails. */
+async function issueChecked(deps: OAuthDeps, clientId: string, scope: string, familyId: string): Promise<TokenResponse> {
+  const pair = await issuePair(deps, clientId, scope, familyId);
+  if (await deps.store.tokens.familyRevoked(familyId)) {
+    await deps.store.tokens.revokeFamily(familyId, new Date(deps.now()));
+    throw invalidGrant("grant revoked");
+  }
+  return pair;
+}
 
 async function issuePair(deps: OAuthDeps, clientId: string, scope: string, familyId: string): Promise<TokenResponse> {
   const now = deps.now();
@@ -45,7 +73,7 @@ async function codeGrant(params: Params, clientId: string, deps: OAuthDeps): Pro
   if (res.status === "missing") throw invalidGrant("invalid code");
   if (res.status === "reused") {
     // RFC 6749 §4.1.2: a reused code revokes everything issued from it.
-    await deps.store.tokens.revokeFamily(res.code.familyId, new Date(deps.now()));
+    await killFamily(deps, res.code.familyId, res.code.clientId, new Date(deps.now()));
     throw invalidGrant("code already used");
   }
   const c = res.code;
@@ -53,7 +81,16 @@ async function codeGrant(params: Params, clientId: string, deps: OAuthDeps): Pro
   if (c.expiresAt.getTime() <= deps.now()) throw invalidGrant("code expired");
   if (params.get("redirect_uri") !== c.redirectUri) throw invalidGrant("redirect_uri mismatch");
   if (!verifyPkce(params.get("code_verifier"), c.codeChallenge)) throw invalidGrant("PKCE verification failed");
-  return issuePair(deps, clientId, c.scope, c.familyId);
+  const pair = await issueChecked(deps, clientId, c.scope, c.familyId);
+  await deps.store.clients.markHasToken(clientId).catch(() => undefined); // only feeds the registration cap
+  return pair;
+}
+
+/** True when `t` was revoked by rotation recently enough (and its family is intact) to answer a retried refresh. */
+async function inGrace(deps: OAuthDeps, t: TokenRecord, now: Date): Promise<boolean> {
+  if (!t.rotated || t.revokedAt === null) return false;
+  if (now.getTime() - t.revokedAt.getTime() > REFRESH_GRACE_MS || t.expiresAt.getTime() <= now.getTime()) return false;
+  return !(await deps.store.tokens.familyRevoked(t.familyId));
 }
 
 async function refreshGrant(params: Params, clientId: string, deps: OAuthDeps): Promise<TokenResponse> {
@@ -64,14 +101,18 @@ async function refreshGrant(params: Params, clientId: string, deps: OAuthDeps): 
   const now = new Date(deps.now());
   if (!t || t.kind !== "refresh" || t.clientId !== clientId) throw invalidGrant("invalid refresh token");
   if (t.revokedAt !== null) {
-    // A rotated (already used) refresh token came back: assume theft, kill the family.
-    await deps.store.tokens.revokeFamily(t.familyId, now);
+    if (await inGrace(deps, t, now)) return issueChecked(deps, clientId, t.scope, t.familyId);
+    // A rotated (already used) refresh token came back late: assume theft, kill the family.
+    await killFamily(deps, t.familyId, clientId, now);
     throw invalidGrant("refresh token reused");
   }
   if (t.expiresAt.getTime() <= now.getTime()) throw invalidGrant("refresh token expired");
-  if (!(await deps.store.tokens.claim(hash, now))) {
-    await deps.store.tokens.revokeFamily(t.familyId, now);
+  if (!(await deps.store.tokens.claim(hash, now, true))) {
+    // Lost a race for the same token: if the winner rotated it a moment ago this is a retry, not theft.
+    const again = await deps.store.tokens.get(hash);
+    if (again && (await inGrace(deps, again, now))) return issueChecked(deps, clientId, t.scope, t.familyId);
+    await killFamily(deps, t.familyId, clientId, now);
     throw invalidGrant("refresh token reused");
   }
-  return issuePair(deps, clientId, t.scope, t.familyId);
+  return issueChecked(deps, clientId, t.scope, t.familyId);
 }

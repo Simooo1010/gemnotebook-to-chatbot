@@ -4,9 +4,9 @@ import { approveAuthorization, checkAuthorizeRequest, denyAuthorization } from "
 import { s256, sha256hex, verifyPkce } from "./crypto";
 import { ACCESS_TTL_MS, CODE_TTL_MS, OAuthError, REFRESH_TTL_MS, type OAuthDeps } from "./deps";
 import { authorizationServerMetadata, protectedResourceMetadata, resolveBaseUrl } from "./metadata";
-import { isValidRedirectUri, MAX_CLIENTS, registerClient } from "./register";
+import { isAllowedRedirectUri, isTrustedRedirectUri, isValidRedirectUri, MAX_CLIENTS, MAX_REGISTRATIONS_PER_IP_PER_HOUR, parseExtraRedirectHosts, REGISTRATION_WINDOW_MS, registerClient } from "./register";
 import { createMemoryStore, type OAuthStore, type TokenRecord } from "./store";
-import { exchangeToken, type TokenResponse } from "./token";
+import { exchangeToken, REFRESH_GRACE_MS, type TokenResponse } from "./token";
 import { revokeAllForClient, revokeEverything, revokeToken, verifyAccessToken } from "./verify";
 
 const BASE = "https://nlm.example.com";
@@ -138,14 +138,52 @@ describe("refresh rotation", () => {
   const refresh = (deps: OAuthDeps, clientId: string, rt: string) =>
     exchangeToken(q({ grant_type: "refresh_token", client_id: clientId, refresh_token: rt }), deps, BASE);
 
-  it("rotates: new pair, old refresh invalid; reuse revokes the family", async () => {
-    const { deps, clientId, tokens } = await fullFlow();
+  it("rotates: new pair; a LATE reuse of the old refresh token revokes the family", async () => {
+    const { deps, clientId, tokens, clock } = await fullFlow();
     const next: TokenResponse = await refresh(deps, clientId, tokens.refresh_token);
     expect(next.refresh_token).not.toBe(tokens.refresh_token);
     expect(await verifyAccessToken(next.access_token, deps)).not.toBeNull();
+    clock.t += REFRESH_GRACE_MS + 1;
     await expectGrantError(refresh(deps, clientId, tokens.refresh_token));
     expect(await verifyAccessToken(next.access_token, deps)).toBeNull();
     await expectGrantError(refresh(deps, clientId, next.refresh_token));
+  });
+  it("grace window: a retry of an already rotated token inside 20 s gets a fresh pair; both pairs stay valid", async () => {
+    const { deps, clientId, tokens, clock } = await fullFlow();
+    const first = await refresh(deps, clientId, tokens.refresh_token);
+    clock.t += REFRESH_GRACE_MS - 1;
+    const retry = await refresh(deps, clientId, tokens.refresh_token);
+    expect(retry.refresh_token).not.toBe(first.refresh_token);
+    for (const t of [first, retry]) expect(await verifyAccessToken(t.access_token, deps)).not.toBeNull();
+    await refresh(deps, clientId, first.refresh_token);
+    await refresh(deps, clientId, retry.refresh_token);
+  });
+  it("grace window ends: the same retry 1 ms later is reuse and revokes everything", async () => {
+    const { deps, clientId, tokens, clock } = await fullFlow();
+    const first = await refresh(deps, clientId, tokens.refresh_token);
+    clock.t += REFRESH_GRACE_MS + 1;
+    await expectGrantError(refresh(deps, clientId, tokens.refresh_token));
+    expect(await verifyAccessToken(first.access_token, deps)).toBeNull();
+    await expectGrantError(refresh(deps, clientId, first.refresh_token));
+  });
+  it("no grace once the family was revoked (owner revoke / theft), even inside the window", async () => {
+    const { deps, clientId, tokens } = await fullFlow();
+    const first = await refresh(deps, clientId, tokens.refresh_token);
+    await revokeToken(first.refresh_token, clientId, deps);
+    await expectGrantError(refresh(deps, clientId, tokens.refresh_token));
+    expect(await verifyAccessToken(first.access_token, deps)).toBeNull();
+  });
+  it("revoking a single access token does not kill the family or block the next refresh", async () => {
+    const { deps, clientId, tokens } = await fullFlow();
+    await revokeToken(tokens.access_token, clientId, deps);
+    const next = await refresh(deps, clientId, tokens.refresh_token);
+    expect(await verifyAccessToken(next.access_token, deps)).not.toBeNull();
+  });
+  it("grace is per client: another client cannot use the retry window", async () => {
+    const { deps, clientId, tokens } = await fullFlow();
+    const other = await register(deps);
+    await refresh(deps, clientId, tokens.refresh_token);
+    await expectGrantError(refresh(deps, other.client_id, tokens.refresh_token));
   });
   it("refresh expires after 30 days; access after 1 h", async () => {
     const { deps, clientId, tokens, clock } = await fullFlow();
@@ -277,5 +315,125 @@ describe("metadata", () => {
   it("base URL: env first, else request origin", () => {
     expect(resolveBaseUrl("https://x.example/", "http://y/a")).toBe("https://x.example");
     expect(resolveBaseUrl(undefined, "https://y.example/a?b")).toBe("https://y.example");
+  });
+});
+
+/** Store whose token inserts take a macrotask, so concurrent grants really interleave (the memory store is otherwise atomic). */
+function withTokenInsert(deps: OAuthDeps, insert: (real: OAuthDeps["store"]["tokens"], t: TokenRecord) => Promise<void>): OAuthDeps {
+  const real = deps.store.tokens; // the memory store's methods are closures, so spreading it is safe
+  return { ...deps, store: { ...deps.store, tokens: { ...real, insert: (t) => insert(real, t) } } };
+}
+const slowInserts = (deps: OAuthDeps, ms = 2) =>
+  withTokenInsert(deps, async (real, t) => {
+    await new Promise((r) => setTimeout(r, ms));
+    await real.insert(t);
+  });
+
+describe("token races", () => {
+  const refresh = (deps: OAuthDeps, clientId: string, rt: string) =>
+    exchangeToken(q({ grant_type: "refresh_token", client_id: clientId, refresh_token: rt }), deps, BASE);
+
+  it("concurrent double refresh: both succeed and the session keeps working", async () => {
+    for (let round = 0; round < 20; round++) {
+      const f = await fullFlow();
+      const deps = slowInserts(f.deps, round % 4);
+      const [a, b] = await Promise.all([refresh(deps, f.clientId, f.tokens.refresh_token), refresh(deps, f.clientId, f.tokens.refresh_token)]);
+      for (const t of [a, b]) expect(await verifyAccessToken(t.access_token, f.deps)).not.toBeNull();
+      await refresh(f.deps, f.clientId, a.refresh_token);
+      await refresh(f.deps, f.clientId, b.refresh_token);
+    }
+  });
+
+  it("concurrent double code exchange: at most one 200, and no token of the family stays alive", async () => {
+    for (let round = 0; round < 20; round++) {
+      const s = setup();
+      const { client_id } = await register(s.deps);
+      const code = await getCode(s.deps, client_id);
+      const deps = slowInserts(s.deps, round % 4);
+      const results = await Promise.allSettled([exchangeToken(codeGrant(client_id, code), deps, BASE), exchangeToken(codeGrant(client_id, code), deps, BASE)]);
+      const ok = results.filter((r): r is PromiseFulfilledResult<TokenResponse> => r.status === "fulfilled");
+      expect(ok.length).toBeLessThanOrEqual(1);
+      expect(results.filter((r) => r.status === "rejected").length).toBeGreaterThanOrEqual(1);
+      for (const r of ok) {
+        expect(await verifyAccessToken(r.value.access_token, s.deps)).toBeNull();
+        await expectGrantError(refresh(s.deps, client_id, r.value.refresh_token));
+      }
+    }
+  });
+
+  it("issueChecked: a family revoked while the pair is being written revokes the new rows and fails the grant", async () => {
+    const s = setup();
+    const { client_id } = await register(s.deps);
+    const code = await getCode(s.deps, client_id);
+    // The replay (second exchange of the same code) is processed completely between the winner's first and second insert.
+    let n = 0;
+    const inserted: string[] = [];
+    const deps = withTokenInsert(s.deps, async (real, t) => {
+      await real.insert(t);
+      inserted.push(t.tokenHash);
+      if (++n === 1) await expectGrantError(exchangeToken(codeGrant(client_id, code), s.deps, BASE));
+    });
+    await expectGrantError(exchangeToken(codeGrant(client_id, code), deps, BASE));
+    expect(inserted).toHaveLength(2);
+    for (const h of inserted) expect((await s.deps.store.tokens.get(h))?.revokedAt).not.toBeNull();
+  });
+});
+
+describe("registration hardening", () => {
+  const evil = { client_name: "Claude", redirect_uris: ["https://evil.example/cb"] };
+
+  it("allow-list: the two Claude callbacks and loopback http only", () => {
+    for (const ok of [REDIRECT, "https://claude.com/api/mcp/auth_callback", "http://localhost:1234/cb", "http://127.0.0.1/x/y?z=1", "http://[::1]:8080/cb"]) expect(isAllowedRedirectUri(ok)).toBe(true);
+    for (const bad of ["https://evil.example/cb", "https://claude.ai/other", "https://claude.ai/api/mcp/auth_callback/", "https://claude.ai.evil.example/api/mcp/auth_callback", "https://www.claude.ai/api/mcp/auth_callback"]) expect(isAllowedRedirectUri(bad)).toBe(false);
+  });
+  it("spoof: https://evil.example/cb with client_name Claude is rejected; the owner can list extra hosts", async () => {
+    const { deps } = setup();
+    await expectGrantError(registerClient(evil, deps), "invalid_redirect_uri");
+    await expectGrantError(registerClient({ ...evil, redirect_uris: [REDIRECT, "https://evil.example/cb"] }, deps), "invalid_redirect_uri");
+    expect(parseExtraRedirectHosts(" My.Host.example, ,bad host,x/y ,other.example")).toEqual(["my.host.example", "other.example"]);
+    const ok = await registerClient({ client_name: "Mine", redirect_uris: ["https://my.host.example/cb"] }, deps, { extraRedirectHosts: ["my.host.example"] });
+    expect(ok.redirect_uris).toEqual(["https://my.host.example/cb"]);
+    await expectGrantError(registerClient({ client_name: "Mine", redirect_uris: ["http://my.host.example/cb"] }, deps, { extraRedirectHosts: ["my.host.example"] }), "invalid_redirect_uri");
+  });
+  it("consent view: warning flag for hosts other than claude.ai / claude.com", async () => {
+    const { deps } = setup();
+    const r = await registerClient({ client_name: "Claude", redirect_uris: ["https://my.host.example/cb"] }, deps, { extraRedirectHosts: ["my.host.example"] });
+    const check = await checkAuthorizeRequest(authParams(r.client_id, { redirect_uri: "https://my.host.example/cb" }), deps, BASE);
+    expect(check.kind === "ok" && check.view).toMatchObject({ redirectHost: "my.host.example", trustedHost: false });
+    const good = await register(deps);
+    const g = await checkAuthorizeRequest(authParams(good.client_id), deps, BASE);
+    expect(g.kind === "ok" && g.view.trustedHost).toBe(true);
+    expect(isTrustedRedirectUri("https://claude.com/api/mcp/auth_callback")).toBe(true);
+    expect(isTrustedRedirectUri("http://localhost:3000/cb")).toBe(false);
+  });
+  it("per-IP limit: the 11th registration within an hour is refused (429) and does not leave a row; other IPs and later hours are fine", async () => {
+    const { deps, clock } = setup();
+    const reg = (ip: string) => registerClient({ client_name: "Claude", redirect_uris: [REDIRECT] }, deps, { ipHash: ip.repeat(64).slice(0, 64) });
+    for (let i = 0; i < MAX_REGISTRATIONS_PER_IP_PER_HOUR; i++) await reg("a");
+    await expect(reg("a")).rejects.toSatisfy((e: unknown) => e instanceof OAuthError && e.status === 429);
+    expect((await deps.store.clients.list()).length).toBe(MAX_REGISTRATIONS_PER_IP_PER_HOUR);
+    await reg("b");
+    clock.t += REGISTRATION_WINDOW_MS + 1;
+    await reg("a");
+  });
+  it("per-IP limit holds against a parallel burst (insert-first re-check)", async () => {
+    const { deps } = setup();
+    const res = await Promise.allSettled(Array.from({ length: 40 }, () => registerClient({ client_name: "Claude", redirect_uris: [REDIRECT] }, deps, { ipHash: "c".repeat(64) })));
+    expect(res.filter((r) => r.status === "fulfilled").length).toBeLessThanOrEqual(MAX_REGISTRATIONS_PER_IP_PER_HOUR);
+    expect((await deps.store.clients.list()).length).toBeLessThanOrEqual(MAX_REGISTRATIONS_PER_IP_PER_HOUR);
+  });
+  it("cap counts only live apps: abandoned registrations older than 1 h do not block, apps with a token do count", async () => {
+    const { deps, clock } = setup();
+    for (let i = 0; i < MAX_CLIENTS; i++) await register(deps);
+    await expectGrantError(register(deps), "invalid_client_metadata"); // all fresh
+    clock.t += 61 * 60_000; // all abandoned now
+    await register(deps);
+    // an app that got a token stays counted forever
+    const s = setup();
+    const { client_id } = await register(s.deps);
+    await exchangeToken(codeGrant(client_id, await getCode(s.deps, client_id)), s.deps, BASE);
+    expect((await s.deps.store.clients.get(client_id))?.hasToken).toBe(true);
+    s.clock.t += 24 * 3600_000;
+    expect(await s.deps.store.clients.countLive(new Date(s.clock.t - 3600_000))).toBe(1);
   });
 });

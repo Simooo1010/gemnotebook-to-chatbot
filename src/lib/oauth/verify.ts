@@ -25,7 +25,7 @@ export async function revokeToken(rawToken: string, clientId: string | null, dep
   if (!t || (clientId !== null && t.clientId !== clientId)) return;
   const at = new Date(deps.now());
   if (t.kind === "refresh") await deps.store.tokens.revokeFamily(t.familyId, at);
-  else await deps.store.tokens.claim(hash, at);
+  else await deps.store.tokens.claim(hash, at, true); // a single revoked access token is not a revoked family
 }
 
 /** Owner action: revoke every token of the app and remove its registration. */
