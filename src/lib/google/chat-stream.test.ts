@@ -150,6 +150,14 @@ describe("chatStream transport", () => {
     expect(s.calls).toHaveLength(4);
   });
 
+  it("T3-11: homepage without cfb2h → the chat URL and the batchexecute URL carry no bl parameter at all", async () => {
+    const noBl: Handler = () => res(200, { body: homepageHtml().replace(/,"cfb2h":"[^"]*"/, "") });
+    const s = await setup([rotateOk, noBl, chatOk]);
+    await s.client.chatStream(turn(s.id));
+    expect(s.calls[2]!.url).toContain("/GenerateFreeFormStreamed?");
+    expect(s.calls[2]!.url).not.toMatch(/[?&]bl=/);
+  });
+
   it("size cap → typed error", async () => {
     const s = await setup([rotateOk, home, () => res(200, { body: chatBody("x".repeat(5000)) })], { chatMaxBytes: 1000 });
     await expect(s.client.chatStream(turn(s.id))).rejects.toBeInstanceOf(ChatResponseTooLargeError);

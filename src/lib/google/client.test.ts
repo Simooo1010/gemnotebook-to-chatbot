@@ -70,6 +70,14 @@ describe("google client", () => {
     noSecrets(JSON.stringify(s.audit));
   });
 
+  it("T3-11: homepage without cfb2h → batchexecute URL has no bl parameter (never an empty bl=)", async () => {
+    const noBl: Handler = () => res(200, { body: homepageHtml().replace(/,"cfb2h":"[^"]*"/, "") });
+    const s = await setup([rotateOk, noBl, () => res(200, { body: batchBody(LIST, [["nb"]]) })]);
+    await s.client.rpc(read(s.id));
+    expect(s.calls[2]!.url).not.toMatch(/[?&]bl=/);
+    expect(s.calls[2]!.url).toContain("rpcids=wXbhsf");
+  });
+
   it("caches tokens: the second call only POSTs", async () => {
     const ok = () => res(200, { body: batchBody(LIST, [1]) });
     const s = await setup([rotateOk, home, ok, ok]);

@@ -290,7 +290,7 @@ export function createGoogleClient(deps: GoogleClientDeps) {
     const label = CHAT_RPC_LABEL;
     lastReqId = nextReqId(lastReqId);
     const reqId = lastReqId;
-    const url = buildChatUrl({ base, bl: tokens.bl ?? "", reqId, fsid: tokens.fsid, authuser: deps.config.authuser });
+    const url = buildChatUrl({ base, bl: tokens.bl ?? undefined, reqId, fsid: tokens.fsid, authuser: deps.config.authuser });
     const body = encodeChatBody({ params: call.params, at: tokens.at });
     const signal = AbortSignal.timeout(deps.config.chatTimeoutMs ?? DEFAULT_CHAT_TIMEOUT_MS);
     const isAbort = (e: unknown) => e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
