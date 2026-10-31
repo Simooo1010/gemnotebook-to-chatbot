@@ -36,6 +36,8 @@ button:disabled{opacity:.6;cursor:default}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .msg{min-height:1.5em;overflow-wrap:anywhere}
 .okmsg{color:var(--ok)}
+.msg:not(.okmsg){color:var(--danger)}
+form.stack{margin-top:1rem}
 .bar{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
 .list{list-style:none;margin:1rem 0;padding:0;display:flex;flex-direction:column;gap:.75rem}
 .card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem}
