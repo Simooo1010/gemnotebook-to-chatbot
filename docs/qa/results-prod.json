@@ -1,5 +1,5 @@
 {
- "total": 98,
+ "total": 100,
  "failed": 0,
  "results": [
   {
@@ -334,7 +334,7 @@
   },
   {
    "step": "4 OAuth (real consent redirect) + MCP",
-   "name": "concurrent double-exchange of one code: exactly one 200 (atomic claim via conditional UPDATE)",
+   "name": "concurrent double-exchange of one code: at most one 200 (atomic claim via conditional UPDATE), the other is 4xx",
    "ok": true,
    "detail": ""
   },
@@ -436,13 +436,25 @@
   },
   {
    "step": "4 OAuth (real consent redirect) + MCP",
-   "name": "old refresh token rejected (4xx)",
+   "name": "grace window: immediate retry of the rotated refresh token -> 200 with a fresh pair",
    "ok": true,
    "detail": ""
   },
   {
    "step": "4 OAuth (real consent redirect) + MCP",
-   "name": "reuse of rotated refresh token revokes the family (documented)",
+   "name": "grace window: both pairs work",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "late reuse (after the 20 s window) of the rotated refresh token rejected (4xx)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "late reuse revokes the family (theft detection): both pairs dead",
    "ok": true,
    "detail": ""
   },
@@ -532,7 +544,7 @@
   },
   {
    "step": "7 Storage outage: fail closed, clean errors",
-   "name": "login with limiter store down -> denied (fail closed), not a 500 / not a success",
+   "name": "login with limiter store down -> 503 storage_unavailable (fail closed; Fix T4-2: not a 429 rate-limit answer)",
    "ok": true,
    "detail": ""
   },
@@ -544,7 +556,7 @@
   },
   {
    "step": "8 Secret scan: responses, server logs, emulator log",
-   "name": "no secret in any of 267 captured responses (bodies + headers)",
+   "name": "no secret in any of 271 captured responses (bodies + headers)",
    "ok": true,
    "detail": ""
   },
@@ -562,7 +574,7 @@
   },
   {
    "step": "8 Secret scan: responses, server logs, emulator log",
-   "name": "emulator request log (182 requests, full bodies): no secret / cookie value / plaintext token",
+   "name": "emulator request log (203 requests, full bodies): no secret / cookie value / plaintext token",
    "ok": true,
    "detail": ""
   },

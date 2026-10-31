@@ -131,8 +131,10 @@ async function authorizeRaw(qs) {
 }
 const pkce = () => { const v = b64u(crypto.randomBytes(48)); return { verifier: v, challenge: b64u(crypto.createHash("sha256").update(v).digest()) }; };
 
-async function register(redirect_uris = [CB], extra = {}) {
-  const r = await fetch(BASE + "/oauth/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ client_name: "Claude", redirect_uris, token_endpoint_auth_method: "none", grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], ...extra }) });
+// Registration is limited to 10 per client IP per hour (Fix T2-2): every call presents its own x-forwarded-for unless a test pins one.
+let ipSeq = 1000;
+async function register(redirect_uris = [CB], extra = {}, ip = `10.77.${(ipSeq >> 8) & 255}.${ipSeq++ & 255}`) {
+  const r = await fetch(BASE + "/oauth/register", { method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": ip }, body: JSON.stringify({ client_name: "Claude", redirect_uris, token_endpoint_auth_method: "none", grant_types: ["authorization_code", "refresh_token"], response_types: ["code"], ...extra }) });
   return { status: r.status, json: await r.json().catch(() => null), headers: hdrs(r) };
 }
 async function getCode({ clientId, redirect = CB, scope = "notebooklm", resource = MCP, state = "s" + crypto.randomBytes(4).toString("hex") }) {
@@ -234,12 +236,18 @@ if (rt0 && clientInfo) {
   if (rotated) {
     const r = await rpc({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { token: rotated.access_token });
     check("refresh", "rotated access token works on /api/mcp", r.status === 200 && !!r.json?.result?.tools, `status ${r.status}`);
+    // Fix T2-1: a retry inside the 20 s grace window gets a fresh pair and leaves the family intact.
+    const retry = await token({ grant_type: "refresh_token", refresh_token: rt0, client_id: clientInfo.client_id });
+    check("refresh", "retry of a just-rotated refresh token (grace window, 20 s) -> 200 with a fresh pair", retry.status === 200 && !!retry.json?.refresh_token && retry.json.refresh_token !== rotated.refresh_token, `${retry.status} ${retry.text}`);
+    const both = await rpc({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { token: rotated.access_token });
+    check("refresh", "grace retry did not revoke the family: the first rotated access token still works", both.status === 200, `status ${both.status}`);
+    await new Promise((r) => setTimeout(r, 21_000));
     const old = await token({ grant_type: "refresh_token", refresh_token: rt0, client_id: clientInfo.client_id });
-    check("refresh", "reuse of rotated refresh token -> 400 invalid_grant", old.status === 400 && old.json?.error === "invalid_grant", `${old.status} ${old.text}`);
+    check("refresh", "late reuse (after the grace window) of a rotated refresh token -> 400 invalid_grant", old.status === 400 && old.json?.error === "invalid_grant", `${old.status} ${old.text}`);
     const afterTheft = await rpc({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { token: rotated.access_token });
-    info("refresh", "after refresh-token reuse the family's access token", `status ${afterTheft.status} (${afterTheft.status === 401 ? "revoked" : "still valid"})`);
+    check("refresh", "after late reuse the family's access token is revoked (theft detection)", afterTheft.status === 401, `status ${afterTheft.status}`);
     const kid = await token({ grant_type: "refresh_token", refresh_token: rotated.refresh_token, client_id: clientInfo.client_id });
-    info("refresh", "after reuse the newest refresh token", `status ${kid.status} ${kid.json?.error ?? ""}`);
+    check("refresh", "after late reuse the newest refresh token is dead", kid.status === 400, `status ${kid.status} ${kid.json?.error ?? ""}`);
   }
 }
 
@@ -282,7 +290,7 @@ async function freshCode() { const x = await getCode({ clientId: cid }); return 
   const x = await freshCode();
   const r = await token({ grant_type: "authorization_code", code: x.code, redirect_uri: CB, code_verifier: x.verifier });
   check("token", "missing client_id -> 401 invalid_client (public client sends client_id in body)", r.status === 401 && r.json?.error === "invalid_client", `${r.status} ${r.text}`);
-  info("token", "invalid_client 401 includes WWW-Authenticate?", String(r.headers["www-authenticate"]));
+  check("token", "invalid_client 401 includes a WWW-Authenticate challenge (RFC 6749 5.2)", !!r.headers["www-authenticate"], String(r.headers["www-authenticate"]));
 }
 {
   const x = await freshCode();
@@ -339,12 +347,12 @@ async function freshCode() { const x = await getCode({ clientId: cid }); return 
   const x = await freshCode();
   const t = await token({ grant_type: "authorization_code", code: x.code, redirect_uri: CB, client_id: cid, code_verifier: x.verifier });
   const [a, b] = await Promise.all([token({ grant_type: "refresh_token", refresh_token: t.json.refresh_token, client_id: cid }), token({ grant_type: "refresh_token", refresh_token: t.json.refresh_token, client_id: cid })]);
-  info("refresh", "parallel double refresh of same token (client retry race)", `${a.status}/${b.status}`);
-  const winner = a.status === 200 ? a : b;
-  if (winner.json?.access_token) {
-    const wa = await rpc({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { token: winner.json.access_token });
-    const wr = await token({ grant_type: "refresh_token", refresh_token: winner.json.refresh_token, client_id: cid });
-    check("refresh", "a duplicated/retried refresh request (network retry or two workers) must not kill the winner's new session", wa.status === 200 && wr.status === 200, `winner access ${wa.status}, winner refresh ${wr.status} ${wr.json?.error ?? ""}`);
+  check("refresh", "parallel double refresh of the same token (client retry race): both 200", a.status === 200 && b.status === 200, `${a.status}/${b.status}`);
+  for (const w of [a, b]) {
+    if (!w.json?.access_token) continue;
+    const wa = await rpc({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { token: w.json.access_token });
+    const wr = await token({ grant_type: "refresh_token", refresh_token: w.json.refresh_token, client_id: cid });
+    check("refresh", "a duplicated/retried refresh request (network retry or two workers) must not kill either new session", wa.status === 200 && wr.status === 200, `access ${wa.status}, refresh ${wr.status} ${wr.json?.error ?? ""}`);
   }
 }
 
@@ -374,6 +382,7 @@ for (const v of [...new Set(["2024-11-05", "2025-03-26", "2025-06-18", ...SUPPOR
   const r = await rpc(init("2025-06-18"), { token: AT });
   const sv = r.json?.result;
   check("protocol", "initialize result has capabilities.tools, serverInfo.name/version", !!sv?.capabilities?.tools && !!sv?.serverInfo?.name && !!sv?.serverInfo?.version, JSON.stringify(sv ?? r.text).slice(0, 400));
+  check("protocol", "stateless server does not advertise tools.listChanged:true (nothing can ever be notified)", sv?.capabilities?.tools?.listChanged !== true, JSON.stringify(sv?.capabilities));
   info("protocol", "initialize result", JSON.stringify(sv ?? r.text).slice(0, 500));
   const n = await rpc({ jsonrpc: "2.0", method: "notifications/initialized" }, { token: AT, headers: { "mcp-protocol-version": "2025-06-18" } });
   check("protocol", "notifications/initialized -> 202 with empty body", n.status === 202 && n.text === "", `${n.status} ${n.text.slice(0, 100)}`);
@@ -725,10 +734,12 @@ info("tools-bad-args", "total bad calls", String(badCalls));
     info("register", "consent page for the spoofed client reached (owner sees heading)", String(c.heading));
   }
   // unauthenticated flood of registrations: the cap is global, so anyone can lock the real client out
+  // (Fix T2-2) per-IP limit: the flooding address is cut off after 10, any other address (the real client) still registers.
   let n = 0, lastStatus = 0;
-  for (let i = 0; i < 260; i++) { const r = await register([CB]); lastStatus = r.status; if (r.status !== 201) break; n++; }
+  for (let i = 0; i < 260; i++) { const r = await register([CB], {}, "198.51.100.200"); lastStatus = r.status; if (r.status !== 201) break; n++; }
   const legit = await register([CB]);
-  check("register", "unauthenticated DCR flood cannot lock out the real client (rate limit / expiry of unused clients)", legit.status === 201, `${n} registrations accepted anonymously, then ${lastStatus}; a legitimate registration now gets ${legit.status} ${JSON.stringify(legit.json)}`);
+  check("register", "unauthenticated DCR flood is rate limited per IP (429 after 10) ...", n === 10 && lastStatus === 429, `${n} registrations accepted from one address, then ${lastStatus}`);
+  check("register", "... and cannot lock out the real client (other address still registers)", legit.status === 201, `a legitimate registration now gets ${legit.status} ${JSON.stringify(legit.json)}`);
 }
 
 await browser.close();

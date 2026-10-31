@@ -70,7 +70,7 @@ src/lib/tools/            MCP tools (accounts_list, notebooks_*, notebook_*, sou
 src/lib/runtime.ts        runtime composition (vault, throttle, usage/audit adapters, Google client, notebook ops), cached on globalThis (+ test)
 src/lib/google/supabase.ts UsageCounter + audit_log adapters over Db (+ test)
 docs/CONNECT.md           how to add the connector in claude.ai, consent screen, revoke
-supabase/                 migrations (0001_vault.sql, 0002_oauth.sql, 0003_hardening.sql, applied in the final manual run) + README
+supabase/                 migrations (0001_vault.sql, 0002_oauth.sql, 0003_hardening.sql applied; 0004_hardening2.sql: ip_hash/has_token/rotated + prune_expired(), apply BEFORE deploying the matching code) + README
 ```
 
 ## Commands

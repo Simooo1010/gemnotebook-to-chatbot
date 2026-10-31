@@ -352,8 +352,15 @@ try {
     const code2 = ok2.loc.searchParams.get("code");
     const [a, b] = await Promise.all([exch(code2), exch(code2)]);
     const wins = [a, b].filter((x) => x.status === 200);
-    check("concurrent double-exchange of one code: exactly one 200 (atomic claim via conditional UPDATE)", wins.length === 1, `statuses ${a.status},${b.status}`);
-    // (family revocation under a concurrent replay is timing dependent: see docs/qa/prod-extra.mjs, finding T4-1)
+    // Fix T4-1: after the replay is detected the family is dead. A 200 is possible only if the winner finished before the replay
+    // was processed; its tokens are then revoked by the replay. If the replay was processed first the winner fails too (0 x 200).
+    check("concurrent double-exchange of one code: at most one 200 (atomic claim via conditional UPDATE), the other is 4xx", wins.length <= 1 && [a, b].some((x) => x.status >= 400 && x.status < 500), `statuses ${a.status},${b.status}`);
+    for (const w of wins) {
+      const wj = JSON.parse(w.text);
+      check("replayed code: the 200 winner's access token is dead afterwards (family revoked)", (await mcp(wj.access_token, { jsonrpc: "2.0", id: 9, method: "tools/list" })).status === 401);
+      check("replayed code: the 200 winner's refresh token is dead afterwards", (await tokenCall({ grant_type: "refresh_token", refresh_token: wj.refresh_token, client_id: clientId })).status >= 400);
+    }
+    // (race statistics over many rounds: docs/qa/prod-extra.mjs)
 
     const ok3 = await authorizeReal(browser, "approve", { clientId, challenge: pk.challenge, state });
     const good = await exch(ok3.loc.searchParams.get("code"));
@@ -406,9 +413,16 @@ try {
     check("new access token works", (await mcp(r1j.access_token, { jsonrpc: "2.0", id: 5, method: "tools/list" })).status === 200);
     const rt = (await emu("/__qa/tables")).oauth_tokens;
     check("old refresh token is marked revoked in storage after rotation", rt.find((x) => x.token_hash === crypto.createHash("sha256").update(refreshToken).digest("hex"))?.revoked === true);
+    // Fix T2-1: an immediate retry of the rotated token (network retry / two workers) is inside the 20 s grace window: fresh pair, family intact.
+    const retry = await refresh(refreshToken);
+    const retryJ = JSON.parse(retry.text || "{}");
+    if (retryJ.access_token) liveTokens.push(retryJ.access_token, retryJ.refresh_token);
+    check("grace window: immediate retry of the rotated refresh token -> 200 with a fresh pair", retry.status === 200 && retryJ.refresh_token && retryJ.refresh_token !== r1j.refresh_token, `status ${retry.status}`);
+    check("grace window: both pairs work", (await mcp(r1j.access_token, { jsonrpc: "2.0", id: 6, method: "tools/list" })).status === 200 && (await mcp(retryJ.access_token, { jsonrpc: "2.0", id: 6, method: "tools/list" })).status === 200);
+    await new Promise((r) => setTimeout(r, 21_000));
     const old = await refresh(refreshToken);
-    check("old refresh token rejected (4xx)", old.status >= 400 && old.status < 500, `status ${old.status}`);
-    check("reuse of rotated refresh token revokes the family (documented)", (await mcp(r1j.access_token, { jsonrpc: "2.0", id: 6, method: "tools/list" })).status === 401);
+    check("late reuse (after the 20 s window) of the rotated refresh token rejected (4xx)", old.status >= 400 && old.status < 500, `status ${old.status}`);
+    check("late reuse revokes the family (theft detection): both pairs dead", (await mcp(r1j.access_token, { jsonrpc: "2.0", id: 6, method: "tools/list" })).status === 401 && (await mcp(retryJ.access_token, { jsonrpc: "2.0", id: 7, method: "tools/list" })).status === 401);
   });
 
   // ---- 5 cron/health ----------------------------------------------------------------------------------------------------------------------
@@ -473,7 +487,7 @@ try {
     const fault = (o) => fetch(EMU + "/__qa/fault", { method: "POST", body: JSON.stringify(o) });
     await fault({ table: "login_attempts", status: 503, times: 1 });
     const l = await apiText("/api/owner/login", { method: "POST", headers: { "content-type": "application/json", origin: BASE, ...xff(ip++) }, body: JSON.stringify({ passphrase: PASS }) });
-    check("login with limiter store down -> denied (fail closed), not a 500 / not a success", l.status === 429 || l.status === 503, `status ${l.status}`);
+    check("login with limiter store down -> 503 storage_unavailable (fail closed; Fix T4-2: not a 429 rate-limit answer)", l.status === 503 && /storage_unavailable/.test(l.text), `status ${l.status}`);
     check("...and no cookie issued", !(l.r.headers.getSetCookie?.() ?? []).some((c) => /__Host-owner=[^;]+/.test(c)));
     console.log("      login-with-store-down status:", l.status, l.text.slice(0, 100));
   });
