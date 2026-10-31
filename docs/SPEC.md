@@ -74,14 +74,17 @@ Honest baseline: this is reverse-engineered access, so Google can change it or f
 Each step is shippable and testable alone, ordered by the critical path (budget policy in `CLAUDE.md`). Every step ends committed + pushed, with `docs/PROGRESS.md` updated.
 
 1. **Step 1 — Scaffold:** Next.js + TS strict, lint/test/build, `/api/health`, `.env.example`, Vercel project + preview. Check: preview URL shows health OK.
-2. **Step 2 — Vault and owner gate:** crypto module (tested), Supabase tables, passphrase login, paste-import of cookies, account list, kill switch. Check: import a test session, see it listed, kill it; DB shows ciphertext only.
-3. **Step 3 — Google transport and notebooks (real-data run):** tokens, batchexecute codec, throttle, error taxonomy, keep-alive, `notebooks_list/create/get` against a real account; fixtures saved. **Go/no-go on the Vercel-IP risk here.** Check: real list matches the notebooklm UI.
+2. **Step 2 — Vault and owner gate:** crypto module (tested), storage interface with an in-memory adapter (tests) and a Supabase adapter + SQL migrations written but not applied, passphrase login, paste-import of cookies, account list, kill switch. Check (automated): crypto/vault tests pass, ciphertext-only storage proven in tests. Live Supabase is part of the final manual run.
+3. **Step 3 — Google transport and notebooks:** tokens, batchexecute codec, throttle, error taxonomy, keep-alive, `notebooks_list/create/get`, tested against recorded fixtures from the protocol research. **Early Vercel-IP probe (no account needed):** an unauthenticated GET of `{base}/` from a deployed preview, checking for the `location=unsupported` gate versus a normal sign-in redirect; result recorded in PROGRESS. The signed-in real-data run (gate 2) happens in the final manual run.
 4. **Step 4 — MCP + OAuth, first connectable build:** Streamable HTTP MCP, OAuth 2.1/PKCE/DCR, approval screen, notebook tools. Check: add the preview URL as a connector in claude.ai and list notebooks.
 5. **Step 5 — Sources:** add URL/YouTube/text/Drive, status wait, text and guide, summary. Check: add a URL, see it appear in the native UI.
 6. **Step 6 — Audio and video overviews + downloads:** create with all v1 options, status, signed download proxy, daily caps. Check: audio and video appear natively in the notebook and the link plays on the phone.
 7. **Step 7 — Chat with citations:** `chat_ask` with source citations. Check: answer and citations match the native chat.
 8. **Step 8 — Hardening and release:** `pg_cron` keep-alive, health check, revoke-all, optional one-click Chrome extension, docs. Gates 3, 4, 5, then production merge, then hand-off with the connector URL.
 9. **Step 9 — Stretch (only if time/credits remain):** file-upload sources (Scotty).
+
+## 6b. Final manual run (owner does everything manual in one batch at the end)
+Claude builds and verifies everything it can without the owner: code, tests, storage adapters, SQL migrations, Vercel project and previews, and random secrets generated and set server-side without ever being displayed. At the end, the owner does one batch (see `SETUP-FOR-OWNER.md`): choose the Supabase project (or approve creating one) so migrations can be applied, choose the owner passphrase, import the Google account(s), run the signed-in real-data checks, add the connector in claude.ai. Gate 2 (real-data run) and Steps' live checks are executed in that batch; until then they are reported as "not yet run against real data", never as passed.
 
 ## 7. Decision log (required)
 | Date | Decision | Decided by | § |
@@ -97,3 +100,4 @@ Each step is shippable and testable alone, ordered by the critical path (budget 
 | 2026-10-30 | Spec v1 approved; autonomous run Steps 1–8 authorised | Simooo1010 | all |
 | 2026-10-30 | Owner passphrase may be supplied as plain env OWNER_PASSPHRASE (compared in constant time) or as scrypt OWNER_PASSPHRASE_HASH; Claude-proposed, owner-informed | Claude, informed to Simooo1010 | 3 |
 | 2026-10-30 | Additive writes allowed on any notebook; rename restricted; no deletes (interpretation of CLAUDE.md write rule) | Claude, informed to Simooo1010 | 5 |
+| 2026-10-30 | All owner-manual actions (Supabase project, passphrase, Google import, connector, live checks) move to one final batch; earlier steps use storage adapters + fixtures | Simooo1010 | 6, 6b |
