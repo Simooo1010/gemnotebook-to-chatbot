@@ -31,7 +31,10 @@ docs/SPEC.template.md     template
 docs/HOW-TO-WORK-WITH-CLAUDE.md
 docs/PROGRESS.md          resume log, updated every step
 package.json              scripts + approved deps
-next.config.ts            security headers (no-store on /api/*, nosniff, no-referrer, DENY)
+next.config.ts            security headers (no-store on /api/*, nosniff, no-referrer, DENY) + CSP for HTML pages
+vercel.json               daily Vercel cron for /api/cron/keepalive
+.github/workflows/keepalive.yml  optional 15-minute keep-alive caller (needs APP_URL variable + CRON_SECRET secret)
+README.md                 product overview, safety summary, doc links
 tsconfig.json             TypeScript strict
 eslint.config.mjs         ESLint flat config (eslint-config-next)
 vitest.config.ts          Vitest (src/**/*.test.ts)
@@ -40,8 +43,12 @@ src/app/layout.tsx        root layout, inline light/dark CSS, no external fonts
 src/app/page.tsx          home: "service is running"
 src/app/api/health/       GET /api/health
 src/lib/health.ts         pure health-report builder (+ health.test.ts)
-src/lib/vault/            crypto (AES-GCM), cookie jar, storage ports, memory + Supabase adapters (supabase.ts, server only), vault service, getVault() factory in index.ts (+ tests)
-src/lib/auth/passphrase.ts owner passphrase verify + login limiter (+ test)
+src/app/api/cron/keepalive/ GET|POST keep-alive sweep (Bearer CRON_SECRET)
+src/app/api/health/deep/  GET per-account deep health (Bearer CRON_SECRET, statuses only)
+src/lib/cron/             auth (bearer gate), keepalive sweep (sequential, ~50 s budget), deep-health, handlers, deps (+ cron.test.ts)
+src/lib/vault/            derive.ts (HKDF from MASTER_SECRET, fallback only), crypto (AES-GCM), cookie jar, storage ports, memory + Supabase adapters (supabase.ts, server only), vault service, getVault() factory in index.ts (+ tests)
+src/lib/auth/passphrase.ts owner passphrase verify + in-memory limiter (dev fallback) (+ test)
+src/lib/auth/login-limiter.ts persistent login limiter over Supabase login_attempts, fails closed in production (+ test)
 src/lib/auth/session.ts   owner session cookie (HMAC, 12 h) + same-origin check (+ test)
 src/lib/owner/            request handlers for login/logout/vault API with injected deps (+ test); deps.ts = production wiring
 src/app/api/owner/        POST login, POST logout
@@ -49,7 +56,7 @@ src/app/api/vault/        accounts (GET list, POST import), accounts/[id]/kill, 
 src/app/login, src/app/vault  owner login page and vault page (+ small client forms)
 src/lib/rpc/              pure batchexecute codec, params builders, row decoders (+ tests)
 src/lib/google/           transport: throttle, http (manual redirects), tokens, keep-alive, client (rpc + chatStream), probe.ts (+ tests)
-src/lib/notebooklm/       typed operations: created.ts (created_objects: notebooks, sources, artifacts), notebooks.ts, sources.ts (add URL/YouTube/text/Drive, source text + guide; reconcile, no double add), studio.ts (audio/video overviews, status, fresh media lookup; reconcile, caps), media-link.ts (signed download tokens, own key context), media-download.ts (fresh-URL streaming + GET handler logic), chat.ts (ask with citations: ready-source pre-flight, cumulative-chunk answer, citations mapped to source titles, conversation id) (+ tests)
+src/lib/notebooklm/       typed operations: created.ts (created_objects: notebooks, sources, artifacts), notebooks.ts, sources.ts (add URL/YouTube/text/Drive, source text + guide; reconcile, no double add), studio.ts (audio/video overviews, status, fresh media lookup; reconcile, caps), media-link.ts (signed download tokens, own key context), media-download.ts (fresh-URL streaming + 60 s URL memo + GET handler logic), chat.ts (ask with citations: ready-source pre-flight, cumulative-chunk answer, citations mapped to source titles, conversation id) (+ tests)
 src/app/api/media/[token]/ GET signed download link: streams audio/video (Range, no-store, generic errors)
 src/lib/oauth/            OAuth 2.1 AS: store ports + memory/Supabase adapters (hashes only), register (DCR), authorize, token (PKCE S256, rotating refresh), verify/revoke, metadata, consent CSRF, http.ts handlers, index.ts getOAuthDeps() (+ tests)
 src/lib/auth/next.ts      safe same-origin `next` path for post-login return (+ test in oauth/http.test.ts)
@@ -63,7 +70,7 @@ src/lib/tools/            MCP tools (accounts_list, notebooks_*, notebook_*, sou
 src/lib/runtime.ts        runtime composition (vault, throttle, usage/audit adapters, Google client, notebook ops), cached on globalThis (+ test)
 src/lib/google/supabase.ts UsageCounter + audit_log adapters over Db (+ test)
 docs/CONNECT.md           how to add the connector in claude.ai, consent screen, revoke
-supabase/                 migrations (0001_vault.sql, 0002_oauth.sql, applied in the final manual run) + README
+supabase/                 migrations (0001_vault.sql, 0002_oauth.sql, 0003_hardening.sql, applied in the final manual run) + README
 ```
 
 ## Commands

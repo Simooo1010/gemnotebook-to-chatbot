@@ -36,7 +36,7 @@ Tools: `studio_audio_create`, `studio_video_create`, `studio_status`, `studio_do
 
 Limits: free Google accounts only get a few audio and video overviews per day. This connector also keeps its own daily limit per account (default 2 audio and 2 video per UTC day). When a limit is reached nothing is started and nothing is retried; try again tomorrow. A failed overview is not retried either (starting a new one counts again). If a start request gives an unclear answer, Claude checks `studio_status` before starting another one, so you do not get duplicates.
 
-The link needs `PUBLIC_BASE_URL` and `OAUTH_SIGNING_KEY` to be set on the server (see `SETUP-FOR-OWNER.md`). The media address never contains Google cookies or Google file addresses.
+The link needs `PUBLIC_BASE_URL` and `MASTER_SECRET` (or `OAUTH_SIGNING_KEY`) to be set on the server (see `SETUP-FOR-OWNER.md`). The media address never contains Google cookies or Google file addresses.
 
 ## Asking questions with citations (Step 7)
 
