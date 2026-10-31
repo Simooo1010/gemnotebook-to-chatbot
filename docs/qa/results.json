@@ -1,0 +1,829 @@
+{
+ "total": 137,
+ "failed": 1,
+ "screenshots": 40,
+ "results": [
+  {
+   "step": "1 Home and health",
+   "name": "GET / renders 200",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "1 Home and health",
+   "name": "home says service is running",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "1 Home and health",
+   "name": "/api/health 200 ok:true",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "1 Home and health",
+   "name": "health env values are all booleans",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "1 Home and health",
+   "name": "health never contains secrets",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "1 Home and health",
+   "name": "health reports MASTER_SECRET/CRON_SECRET/PUBLIC_BASE_URL set",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "1 Home and health",
+   "name": "health no-store",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate",
+   "name": "/vault signed out lands on /login",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate",
+   "name": "wrong passphrase: generic error only",
+   "ok": true,
+   "detail": "That did not work."
+  },
+  {
+   "step": "2 Login gate",
+   "name": "still on /login",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate",
+   "name": "passphrase field cleared after failure",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate",
+   "name": "correct passphrase lands on /vault",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "no horizontal scroll (login-default light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 6 text elements (login-default light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "no horizontal scroll (login-error light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 7 text elements (login-error light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "no horizontal scroll (login-default dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 6 text elements (login-default dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "no horizontal scroll (login-error dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 7 text elements (login-error dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 6 text elements (login-default light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 7 text elements (login-error light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 6 text elements (login-default dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 7 text elements (login-error dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "vault empty state text (light/phone)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "no horizontal scroll (vault-empty light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 20 text elements (vault-empty light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "no horizontal scroll (vault-import-error light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 21 text elements (vault-import-error light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "vault empty state text (dark/phone)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "no horizontal scroll (vault-empty dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 20 text elements (vault-empty dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "no horizontal scroll (vault-import-error dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 21 text elements (vault-import-error dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "vault empty state text (light/desktop)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 20 text elements (vault-empty light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 21 text elements (vault-import-error light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "vault empty state text (dark/desktop)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 20 text elements (vault-empty dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6a Screenshots: login and empty vault",
+   "name": "contrast >= 4.5 for 21 text elements (vault-import-error dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "empty state shown",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "no connected apps yet",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "malformed JSON: error shown",
+   "ok": true,
+   "detail": "That is not a cookie export. Paste the JSON exactly as the extension exported it. The box was cleared; paste the export again."
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "malformed JSON: message names nothing sensitive",
+   "ok": true,
+   "detail": "That is not a cookie export. Paste the JSON exactly as the extension exported it. The box was cleared; paste the export again."
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "textarea cleared after failure",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "missing cookie: names only __Secure-1PSIDTS",
+   "ok": false,
+   "detail": "Something went wrong. Nothing was changed. The box was cleared; paste the export again."
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "no account was created by failures",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "valid import: account listed Active",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "valid import: textarea cleared",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "valid import: success message",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "pasted JSON / cookie values never shown back in page",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "cookie names count shown, not names",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "kill asks for confirmation",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "cancel keeps account Active",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "kill -> Disabled",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "disabled account has no Kill button",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "revoke all asks for confirmation",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "revoke all -> all Disabled",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke",
+   "name": "page html free of cookie values after all steps",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "AS metadata: S256 only, issuer matches",
+   "ok": true,
+   "detail": "[\"S256\"]"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "DCR register 201 with client_id",
+   "ok": true,
+   "detail": "status 201"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "DCR public client (no secret issued)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "authorize signed out -> /login?next=/oauth/authorize...",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "consent page shows client name + redirect host",
+   "ok": true,
+   "detail": "Allow “Claude” to use NotebookLM?"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "Deny -> callback with error=access_denied and state",
+   "ok": true,
+   "detail": "https://claude.ai/api/mcp/auth_callback"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "Deny -> no code issued",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "Approve -> callback with code and state",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "token exchange with wrong PKCE verifier rejected",
+   "ok": true,
+   "detail": "status 400"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "token exchange 200 with access + refresh token",
+   "ok": true,
+   "detail": "status 200"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "token response no-store, Bearer, ~1h",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "replay of auth code rejected",
+   "ok": true,
+   "detail": "status 400"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "replay revokes the token family (documented behaviour)",
+   "ok": true,
+   "detail": "status 401"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "fresh grant after replay works",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "/api/mcp without token -> 401",
+   "ok": true,
+   "detail": "status 401"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "401 has WWW-Authenticate Bearer + resource_metadata",
+   "ok": true,
+   "detail": "Bearer error=\"invalid_token\", error_description=\"No authorization provided\", sco"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "invalid bearer -> 401",
+   "ok": true,
+   "detail": "status 401"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "initialize ok",
+   "ok": true,
+   "detail": "status 200"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "tools/list returns exactly the 17 expected tools (got 17)",
+   "ok": true,
+   "detail": "missing  extra "
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "no tool is destructive",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "API import of synthetic account 201",
+   "ok": true,
+   "detail": "status 201"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "accounts_list 200 and not an error",
+   "ok": true,
+   "detail": "event: message\ndata: {\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"accounts\\\":[{\\\"id\\\":\\\"d7f00916-d0cb-45ae-81c6-b379f"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "accounts_list shows the synthetic account",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "accounts_list response contains no cookie data",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "refresh -> new access + refresh token",
+   "ok": true,
+   "detail": "status 200"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "new access token works",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "old refresh token rejected",
+   "ok": true,
+   "detail": "status 400"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "reuse of a rotated refresh token revokes the family (documented)",
+   "ok": true,
+   "detail": "status 401"
+  },
+  {
+   "step": "5 Cron and deep health",
+   "name": "/api/cron/keepalive without bearer -> 401",
+   "ok": true,
+   "detail": "status 401"
+  },
+  {
+   "step": "5 Cron and deep health",
+   "name": "/api/cron/keepalive wrong bearer -> 401",
+   "ok": true,
+   "detail": "status 401"
+  },
+  {
+   "step": "5 Cron and deep health",
+   "name": "/api/health/deep without bearer -> 401",
+   "ok": true,
+   "detail": "status 401"
+  },
+  {
+   "step": "5 Cron and deep health",
+   "name": "/api/health/deep wrong bearer -> 401",
+   "ok": true,
+   "detail": "status 401"
+  },
+  {
+   "step": "5 Cron and deep health",
+   "name": "keepalive with CRON_SECRET -> 200 JSON",
+   "ok": true,
+   "detail": "status 200"
+  },
+  {
+   "step": "5 Cron and deep health",
+   "name": "deep health with CRON_SECRET -> 200 JSON",
+   "ok": true,
+   "detail": "status 200"
+  },
+  {
+   "step": "5 Cron and deep health",
+   "name": "cron/deep responses leak no cookies, names or secrets",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "5 Cron and deep health",
+   "name": "cron responses no-store",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (vault-accounts light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 33 text elements (vault-accounts light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (vault-accounts+needs_reauth badge light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-accounts+needs_reauth badge light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (vault-confirm-kill light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-kill light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (vault-confirm-revoke-all light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-revoke-all light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (vault-confirm-revoke-app light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-revoke-app light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (vault-accounts dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 33 text elements (vault-accounts dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (vault-accounts+needs_reauth badge dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-accounts+needs_reauth badge dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (vault-confirm-kill dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-kill dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (vault-confirm-revoke-all dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-revoke-all dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (vault-confirm-revoke-app dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-revoke-app dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 33 text elements (vault-accounts light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-accounts+needs_reauth badge light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-kill light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-revoke-all light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-revoke-app light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 33 text elements (vault-accounts dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-accounts+needs_reauth badge dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-kill dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-revoke-all dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 34 text elements (vault-confirm-revoke-app dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (oauth-consent light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 11 text elements (oauth-consent light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (oauth-consent-error light phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 3 text elements (oauth-consent-error light phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (oauth-consent dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 11 text elements (oauth-consent dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "no horizontal scroll (oauth-consent-error dark phone)",
+   "ok": true,
+   "detail": "scrollWidth 390 > innerWidth 390"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 3 text elements (oauth-consent-error dark phone)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 11 text elements (oauth-consent light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 3 text elements (oauth-consent-error light desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 11 text elements (oauth-consent dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  },
+  {
+   "step": "6b Screenshots: vault with account, confirm dialogs, consent",
+   "name": "contrast >= 4.5 for 3 text elements (oauth-consent-error dark desktop)",
+   "ok": true,
+   "detail": "[]"
+  }
+ ]
+}
