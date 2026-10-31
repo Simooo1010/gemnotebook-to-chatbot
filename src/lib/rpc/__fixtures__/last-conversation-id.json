@@ -1,0 +1,6 @@
+{
+ "source": "teng-lin/notebooklm-py @0fcc842 tests/cassettes/web/chat_ask.yaml (recorded, SANITIZED: ids -> synthetic uuids, free text -> same-length filler, URLs -> example.com / synthetic lh3)",
+ "rpcId": "hPTbtc",
+ "note": "",
+ "body": ")]}'\n\n149\n[[\"wrb.fr\",\"hPTbtc\",\"[[[\\\"00000000-0000-4000-8000-000000000029\\\"]]]\",null,null,null,\"generic\"],[\"di\",172],[\"af.httprm\",172,\"5342204833051653672\",10]]\n23\n[[\"e\",4,null,null,187]]\n"
+}

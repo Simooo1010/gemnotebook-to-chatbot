@@ -1,0 +1,6 @@
+{
+ "source": "teng-lin/notebooklm-py @0fcc842 tests/cassettes/web/sources_add_url.yaml (recorded, SANITIZED: ids -> synthetic uuids, free text -> same-length filler, URLs -> example.com / synthetic lh3)",
+ "rpcId": "izAoDd",
+ "note": "",
+ "body": ")]}'\n\n349\n[[\"wrb.fr\",\"izAoDd\",\"[[[[\\\"00000000-0000-4000-8000-000000000025\\\"],\\\"Lplxotpxei lplxotpxeiti - Lplxotpxe\\\",[null,31537,[1768312225,274170000],[\\\"00000000-0000-4000-8000-000000000026\\\",[1768312224,923625000]],5,null,1,[\\\"https://example.com/p/6\\\"],64632],[null,2]]]]\",null,null,null,\"generic\"],[\"di\",6489],[\"af.httprm\",6488,\"2273606585785568650\",10]]\n23\n[[\"e\",4,null,null,417]]\n"
+}

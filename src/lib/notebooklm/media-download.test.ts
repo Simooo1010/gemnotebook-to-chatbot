@@ -248,7 +248,9 @@ describe("GET /api/media/<token>: streaming", () => {
       expect(first).toContain(`SID=${SYN_SID}`);
       expect(first).not.toContain("LH3_COOKIE_VALUE"); // googleusercontent cookie never goes to google.com
       expect(second).toContain("LH3_COOKIE_VALUE");
-      expect(second).not.toContain(`SID=${SYN_SID}`); // google.com cookies never go to googleusercontent.com
+      // T3-8: media-only view: the domain-wide .google.com session cookies are re-scoped onto the download host
+      // (reference CLI behavior), the rotated hop cookie too; nothing is stored (see media-cookies.test.ts).
+      expect(second).toContain(`SID=${SYN_SID}`);
       await r.arrayBuffer();
     });
 

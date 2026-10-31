@@ -49,7 +49,7 @@ export interface GoogleClientConfig {
   tokenTtlMs?: number;
   /** Chat turn timeout (whole response). Default 120 s. */
   chatTimeoutMs?: number;
-  /** Chat response size cap in bytes. Default 2 MB. */
+  /** Chat response size cap in bytes. Default 8 MiB (DEFAULT_CHAT_MAX_BYTES). */
   chatMaxBytes?: number;
 }
 
@@ -94,7 +94,12 @@ export interface ChatStreamResult {
 }
 
 export const DEFAULT_CHAT_TIMEOUT_MS = 120_000;
-export const DEFAULT_CHAT_MAX_BYTES = 2 * 1024 * 1024;
+/**
+ * Real chat streams are cumulative (every chunk repeats the whole answer and its citations): 370-710 KB for a
+ * ~2000-char answer with 7-9 citations (notebooklm-py cassettes chat_ask*.yaml), growing with answer length x
+ * citation count. 8 MiB leaves headroom for long answers with many citations; it stays a configurable cap.
+ */
+export const DEFAULT_CHAT_MAX_BYTES = 8 * 1024 * 1024;
 
 async function readCapped(response: { body: ReadableStream<Uint8Array> | null; text(): Promise<string> }, max: number): Promise<string> {
   if (!response.body) {
@@ -262,6 +267,9 @@ export function createGoogleClient(deps: GoogleClientDeps) {
           jar = r.jar;
           return r.result;
         } catch (e2) {
+          // A 400 that survives fresh tokens (the homepage check above found a live session) is a bad request,
+          // not a dead session: do not flag the account.
+          if (e2 instanceof RpcAuthError && e2.reason === "http_400") throw new HttpStatusError(rpcId, 400);
           if (e2 instanceof RpcAuthError) return await markReauth(call.accountId);
           throw e2;
         }
@@ -282,7 +290,7 @@ export function createGoogleClient(deps: GoogleClientDeps) {
     const label = CHAT_RPC_LABEL;
     lastReqId = nextReqId(lastReqId);
     const reqId = lastReqId;
-    const url = buildChatUrl({ base, bl: tokens.bl ?? "", reqId, fsid: tokens.fsid, authuser: deps.config.authuser });
+    const url = buildChatUrl({ base, bl: tokens.bl ?? undefined, reqId, fsid: tokens.fsid, authuser: deps.config.authuser });
     const body = encodeChatBody({ params: call.params, at: tokens.at });
     const signal = AbortSignal.timeout(deps.config.chatTimeoutMs ?? DEFAULT_CHAT_TIMEOUT_MS);
     const isAbort = (e: unknown) => e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");

@@ -81,6 +81,8 @@ export interface MediaDownloaderDeps {
   fetch: FetchLike;
   audit: AuditSink;
   now?: () => number;
+  /** NotebookLM base URL, sent as the media request's Referer. Default https://notebook.google.com. */
+  base?: string;
   /** Optional memo of the fresh media target (production wiring passes one). Without it every request re-lists. */
   urlMemo?: UrlMemo<{ url: string; kind: MediaKind }>;
 }
@@ -114,7 +116,7 @@ export function createMediaDownloader(deps: MediaDownloaderDeps) {
       }
       const jar = await deps.vault.getJar(claims.accountId);
       const m = await deps.throttle.schedule(claims.accountId, () =>
-        fetchMedia(deps.fetch, jar, target.url, { range: opts.range, signal: opts.signal, now }),
+        fetchMedia(deps.fetch, jar, target.url, { range: opts.range, signal: opts.signal, now, base: deps.base }),
       );
       if (!sameJar(jar, m.jar)) await deps.vault.updateJar(claims.accountId, m.jar).catch(() => undefined);
       return { status: m.status, body: m.body, kind: target.kind, contentLength: m.contentLength, contentRange: m.contentRange, acceptRanges: m.acceptRanges };
