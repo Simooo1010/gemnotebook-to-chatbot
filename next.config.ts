@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { buildCsp } from "./src/lib/csp";
 
 /**
  * Content-Security-Policy for the HTML pages (login, vault, consent, home). No external hosts anywhere.
@@ -14,18 +15,8 @@ import type { NextConfig } from "next";
  */
 const isDev = process.env.NODE_ENV !== "production";
 
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "object-src 'none'",
-  "frame-ancestors 'none'",
-  "form-action 'self'",
-  "base-uri 'none'",
-].join("; ");
+const csp = buildCsp("page", isDev);
+const consentCsp = buildCsp("consent", isDev);
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -38,7 +29,10 @@ const nextConfig: NextConfig = {
     return [
       { source: "/:path*", headers: common },
       // HTML pages only: the JSON/stream endpoints under /api have no markup to protect.
-      { source: "/((?!api/).*)", headers: [{ key: "Content-Security-Policy", value: csp }] },
+      // The consent page has its own policy (form-action must allow the redirect back to the client), so it is excluded here:
+      // two CSP headers would combine and the stricter one would still block the redirect.
+      { source: "/((?!api/|oauth/authorize).*)", headers: [{ key: "Content-Security-Policy", value: csp }] },
+      { source: "/oauth/authorize", headers: [{ key: "Content-Security-Policy", value: consentCsp }] },
       { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store" }] },
     ];
   },

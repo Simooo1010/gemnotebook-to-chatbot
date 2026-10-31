@@ -85,3 +85,7 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
 - Supabase `notebook-connector` (ref zqifmidzktzcsglhojdc, eu-west-3) via Composio: migrations 0001–0003 applied and verified live (9 tables, RLS on, 0 policies, 0 grants to anon/authenticated).
 - Vercel env created by Claude: SUPABASE_URL (prod+preview), PUBLIC_BASE_URL (prod only). Owner to add: SUPABASE_SERVICE_ROLE_KEY, OWNER_PASSPHRASE, MASTER_SECRET, CRON_SECRET (secrets deliberately not created by Claude).
 - Next: owner adds the 4 secrets → redeploy production → /api/health → import Google account → add connector → live checks (gate 2).
+
+## Fix loop log (owner-authorised: push + merge fixes, 2026-10-31)
+- **Consent Approve did nothing (owner report).** Cause: site-wide CSP `form-action 'self'`; Chromium blocks the consent form POST ('Sending form data ... violates form-action'). Fix: the consent page alone gets `form-action 'self' https: http://localhost:* http://127.0.0.1:*` (src/lib/csp.ts, next.config.ts). Proven in a real browser: old policy FAILS, fixed policy passes (docs/qa/consent-redirect.mjs, run with a fresh `next dev` and kill stale servers first). Earlier QA missed it because the harness intercepted /oauth/consent itself.
+- Earlier today: importer accepted only `SID`; now `SID` or `__Secure-1PSID` (PR #11).
