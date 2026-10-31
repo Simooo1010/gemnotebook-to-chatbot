@@ -361,6 +361,17 @@ describe("status", () => {
   });
 });
 
+describe("notebook with no artifacts yet (T3-1: real Google answers '[]')", () => {
+  it("studio_status works on the real empty-list shape, and so does the pre-create snapshot of a first audio/video overview", async () => {
+    const s = setup([src(S1, "ready")], { LIST_ARTIFACTS: [ret([])] });
+    expect(await s.ops.getStudioStatus(ACC, NB)).toEqual({ artifacts: [], total: 0, nextCheckInSeconds: 0 });
+    const a = setup([src(S1, "ready")], { LIST_ARTIFACTS: [ret([])], CREATE_ARTIFACT: [ret(createResult("art-A", 1, 1))] });
+    expect(await a.ops.createAudioOverview(ACC, NB)).toMatchObject({ artifactId: "art-A", status: "queued" });
+    const v = setup([src(S1, "ready")], { LIST_ARTIFACTS: [ret([N])], CREATE_ARTIFACT: [ret(createResult("art-V", 3, 1))] });
+    expect(await v.ops.createVideoOverview(ACC, NB)).toMatchObject({ artifactId: "art-V", type: "video" });
+  });
+});
+
 describe("getMedia (fresh URL, server side only)", () => {
   it("re-lists and returns the current media url for a ready audio/video", async () => {
     const s = setup([], { LIST_ARTIFACTS: [ret(listResult(artRow("a1", { type: 1, status: 3, media: true }), artRow("v1", { type: 3, status: 3, media: true })))] });

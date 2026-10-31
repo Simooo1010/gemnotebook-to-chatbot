@@ -118,7 +118,7 @@ describe("real captures: artifacts", () => {
     expect(d.statusCode).toBe(1);
   });
   // T3-1 BLOCKER: real capture of a notebook with no artifacts.
-  it.fails("T3-1: empty artifact list ('[]') decodes to []", () => {
+  it("T3-1: empty artifact list ('[]') decodes to []", () => {
     const { result } = dec("artifacts-list-empty");
     expect(result).toEqual([]);
     expect(R.decodeArtifactList(result, "gArtLc")).toEqual([]);
@@ -157,6 +157,8 @@ describe("real captures: chat stream", () => {
   it.fails("T3-3: citation excerpt text contains no link-annotation URL strings", () => {
     const withLinks = ans().citations.filter((c) => /https?:\/\//.test(c.text));
     expect(withLinks).toEqual([]);
+    // Clean spans only: markers like "[ edit]" survive, the href inside the link annotation does not.
+    expect(ans().citations.some((c) => c.text.includes("]"))).toBe(true);
   });
 });
 
@@ -164,11 +166,13 @@ describe("real captures: source text", () => {
   // T3-2: hizoJc tree: blocks [start,end,[spans...],[kind],..., listId...]; concatenating every string leaf adds list ids and link URLs.
   it.fails("T3-2: decoded source text length equals the document range and has no link/list-id noise", () => {
     const { result } = dec("source-text");
-    const tree = (result as unknown[][])[3]![0] as number[][];
+    const tree = ((result as unknown[][])[3]![0] as unknown[][])[0] as number[][];
     const lastEnd = (tree[tree.length - 1] as number[])[1]!;
     const t = R.decodeSourceText(result, "hizoJc").text;
     expect(t).not.toMatch(/https?:\/\//);
-    expect(t.length).toBe(lastEnd);
+    // Spans are contiguous, so the clean text is exactly the document range; blocks are joined with "\n" (cosmetic).
+    expect(t.length).toBe(lastEnd + (tree.length - 1));
+    expect(t.replaceAll("\n", "").length).toBe(lastEnd);
   });
 });
 

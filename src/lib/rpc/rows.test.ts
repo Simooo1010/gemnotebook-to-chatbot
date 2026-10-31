@@ -119,3 +119,18 @@ describe("chat", () => {
     expect(() => parseChatResponse("<html></html>")).toThrow(RpcNoFramesError);
   });
 });
+
+describe("empty lists are not drift (T3-1)", () => {
+  it.each([[[]], [null], [[null]], [[[]]]])("notebooks / artifacts / conversation id for %j", (shape) => {
+    expect(R.decodeNotebookList(shape, "wXbhsf")).toEqual([]);
+    expect(R.decodeArtifactList(shape, "gArtLc")).toEqual([]);
+    expect(R.decodeLastConversationId(shape, "hPTbtc")).toBeNull();
+  });
+  it("genuine shape drift still raises", () => {
+    expect(() => R.decodeNotebookList("oops", "wXbhsf")).toThrow(RpcDriftError);
+    expect(() => R.decodeNotebookList([["not-a-row"]], "wXbhsf")).toThrow(RpcDriftError);
+    expect(() => R.decodeArtifactList({ a: 1 }, "gArtLc")).toThrow(RpcDriftError);
+    expect(() => R.decodeArtifactList([5], "gArtLc")).toThrow(RpcDriftError);
+    expect(() => R.decodeLastConversationId("oops", "hPTbtc")).toThrow(RpcDriftError);
+  });
+});
