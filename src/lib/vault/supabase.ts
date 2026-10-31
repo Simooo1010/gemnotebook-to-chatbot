@@ -26,6 +26,10 @@ export interface Db {
   delete(table: string, match: Row): Promise<void>;
   /** Optional: delete rows whose `column` is strictly before `isoTime` (and equal to `match`, if given). Used for pruning. */
   deleteBefore?(table: string, column: string, isoTime: string, match?: Row): Promise<void>;
+  /** Optional: number of rows equal to `match` whose `gte` columns are >= the given values (exact count, no rows transferred). */
+  count?(table: string, opts: { match?: Row; gte?: Row }): Promise<number>;
+  /** Optional: calls a database function without arguments (service role only) and returns its JSON result. */
+  rpc?(fn: string): Promise<unknown>;
 }
 
 /** Generic on purpose: the underlying error (which may echo queries or values) is never propagated. */
@@ -37,7 +41,7 @@ export class VaultStorageError extends Error {
 }
 
 /** Wraps a service-role Supabase client as a `Db`. Errors are replaced by VaultStorageError. */
-export function dbFromSupabase(sb: Pick<SupabaseClient, "from">): Db {
+export function dbFromSupabase(sb: Pick<SupabaseClient, "from"> & Partial<Pick<SupabaseClient, "rpc">>): Db {
   const fail = (): never => {
     throw new VaultStorageError();
   };
@@ -77,6 +81,20 @@ export function dbFromSupabase(sb: Pick<SupabaseClient, "from">): Db {
       for (const [k, v] of Object.entries(match)) q = q.eq(k, v as string);
       const { error } = await q;
       if (error) fail();
+    },
+    async count(table, { match = {}, gte = {} }) {
+      let q = sb.from(table).select("*", { count: "exact" });
+      for (const [k, v] of Object.entries(match)) q = q.eq(k, v as string);
+      for (const [k, v] of Object.entries(gte)) q = q.gte(k, v as string);
+      const { count, error } = await q.range(0, 0);
+      if (error || typeof count !== "number") return fail();
+      return count;
+    },
+    async rpc(fn) {
+      if (!sb.rpc) return fail();
+      const { data, error } = await sb.rpc(fn);
+      if (error) return fail();
+      return data;
     },
   };
 }

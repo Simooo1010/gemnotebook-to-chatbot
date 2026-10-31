@@ -81,6 +81,8 @@ export async function handleLogin(request: Request, deps: OwnerDeps): Promise<Re
   // The attempt is registered before the passphrase is checked, so parallel guesses are counted too.
   const gate = await deps.limiter.attempt(key);
   if (!gate.allowed) {
+    // Missing/failing storage fails closed too, but it is an outage, not a rate limit: say so (503), do not blame the owner (429).
+    if (gate.unavailable) return err(503, "storage_unavailable", "Sign-in is temporarily unavailable: the server storage is not reachable.", undefined, { "Retry-After": "60" });
     return err(429, "too_many_attempts", "Too many attempts. Try again later.", undefined, {
       "Retry-After": String(Math.ceil(gate.retryAfterMs / 1000)),
     });

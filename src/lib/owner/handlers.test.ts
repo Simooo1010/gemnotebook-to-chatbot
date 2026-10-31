@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createDenyLimiter } from "@/lib/auth/login-limiter";
 import { createLoginLimiter } from "@/lib/auth/passphrase";
 import { cookieName, createSessionToken } from "@/lib/auth/session";
 import { loadKeyring } from "@/lib/vault/crypto";
@@ -112,6 +113,16 @@ describe("login", () => {
     expect((await handleLogin(post("/api/owner/login", { passphrase: PASS }, { "x-forwarded-for": "198.51.100.1" }), deps)).status).toBe(200);
     t += 16 * 60_000;
     expect((await handleLogin(post("/api/owner/login", { passphrase: PASS }, ip), deps)).status).toBe(200);
+  });
+
+  it("storage missing or failing is 503 storage_unavailable, not a rate-limit 429", async () => {
+    for (const limiter of [createDenyLimiter(), { attempt: () => ({ allowed: false, retryAfterMs: 60_000, unavailable: true }), recordSuccess: () => undefined }]) {
+      const { deps } = setup({ limiter });
+      const res = await handleLogin(post("/api/owner/login", { passphrase: PASS }), deps);
+      expect(res.status).toBe(503);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("storage_unavailable");
+      expect(res.headers.get("set-cookie")).toBeNull();
+    }
   });
 
   it("503 (not a crash, no secrets) when the signing key is short", async () => {

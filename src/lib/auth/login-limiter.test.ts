@@ -153,6 +153,18 @@ describe("createLoginLimiterFromEnv", () => {
     expect((await createLoginLimiterFromEnv({ NODE_ENV: "production" }).attempt(K)).allowed).toBe(false);
     expect((await createLoginLimiterFromEnv({ NODE_ENV: "production", SUPABASE_URL: "https://x.supabase.co" }).attempt(K)).allowed).toBe(false);
     expect((await createDenyLimiter().attempt(K)).allowed).toBe(false);
+    expect((await createDenyLimiter().attempt(K)).unavailable).toBe(true);
+  });
+
+  it("a storage error is reported as unavailable; a real limit is not", async () => {
+    const f = fakeDb();
+    const l = createPersistentLoginLimiter({ db: f.db, maxAttempts: 1 });
+    expect((await l.attempt(K)).allowed).toBe(true);
+    const limited = await l.attempt(K);
+    expect(limited.allowed).toBe(false);
+    expect(limited.unavailable).toBeUndefined();
+    f.state.fail = true;
+    expect(await l.attempt(K2)).toMatchObject({ allowed: false, unavailable: true });
   });
 
   it("outside production without storage falls back to the in-memory limiter", async () => {

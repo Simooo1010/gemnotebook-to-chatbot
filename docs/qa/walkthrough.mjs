@@ -462,10 +462,13 @@ try {
     check("refresh -> new access + refresh token", r1.status === 200 && r1j.refresh_token && r1j.refresh_token !== refreshToken && r1j.access_token !== accessToken, `status ${r1.status}`);
     const useNew = await mcp(r1j.access_token, { jsonrpc: "2.0", id: 4, method: "tools/list" });
     check("new access token works", useNew.status === 200);
+    const retry = await refresh(refreshToken); // inside the 20 s grace window (Fix T2-1): a retry gets a fresh pair, the family stays intact
+    check("retry of a just-rotated refresh token (grace window) -> 200, family intact", retry.status === 200 && (await mcp(r1j.access_token, { jsonrpc: "2.0", id: 5, method: "tools/list" })).status === 200, `status ${retry.status}`);
+    await new Promise((r) => setTimeout(r, 21_000));
     const old = await refresh(refreshToken);
-    check("old refresh token rejected", old.status >= 400 && old.status < 500, `status ${old.status}`);
+    check("old refresh token rejected after the grace window", old.status >= 400 && old.status < 500, `status ${old.status}`);
     const afterReuse = await mcp(r1j.access_token, { jsonrpc: "2.0", id: 5, method: "tools/list" });
-    check("reuse of a rotated refresh token revokes the family (documented)", afterReuse.status === 401, `status ${afterReuse.status}`);
+    check("late reuse of a rotated refresh token revokes the family (documented)", afterReuse.status === 401, `status ${afterReuse.status}`);
   });
 
   // ---- 5 cron/health --------------------------------------------------------------------------------

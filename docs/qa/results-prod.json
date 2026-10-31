@@ -1,0 +1,606 @@
+{
+ "total": 100,
+ "failed": 0,
+ "results": [
+  {
+   "step": "0 Prod-mode precondition",
+   "name": "health ok and Supabase env present (running with emulator)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "0 Prod-mode precondition",
+   "name": "health env values are booleans only",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "0 Prod-mode precondition",
+   "name": "health: no secrets",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "0 Prod-mode precondition",
+   "name": "x-powered-by absent",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "0 Prod-mode precondition",
+   "name": "production build, not dev (no HMR / webpack-hmr, no next-devtools)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "1 Security headers on every route",
+   "name": "security headers present on all 22 routes",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "login 200",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "cookie is __Host-owner with Secure; HttpOnly; SameSite=Strict; Path=/; no Domain",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "session cookie max-age <= 12h",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "login response body has no cookie/secret",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "/vault signed out lands on /login",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "wrong passphrase: generic error",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "correct passphrase lands on /vault (Chromium accepted Secure __Host- cookie on http://localhost)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "browser stored __Host-owner (secure, httpOnly, strict, path=/)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "session survives reload",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "logout clears session (Max-Age=0 for __Host- cookie)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "5 wrong attempts -> 401 each",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "limiter persisted 5 attempt rows in login_attempts",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "6th attempt (even with the CORRECT passphrase) -> 429 + Retry-After",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "denied attempt removes its own row (lock not extended)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "a different client IP is unaffected",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "login_attempts store only 64-hex key hashes (no IP)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "2 Login gate (production cookie)",
+   "name": "successful login deleted that client's attempt rows",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "empty state shown",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "malformed JSON -> error, no account",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "missing cookie: names only __Secure-1PSIDTS",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "REAL-shaped export (__Secure-1PSID, no SID) accepted -> Active",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "cookie-name count shown (6), no names/values",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "textarea cleared after import",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "page free of secrets after import",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "accounts row created in storage, status active, email_hash null/hash",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "sessions.envelope present and is ciphertext (no plaintext cookie value / name / marker)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "envelope does not decode to plaintext (b64/hex)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "envelope = JSON {v, kid, nonce, ct} (AES-256-GCM, 12-byte nonce, tag inside ct)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "kill: account disabled AND session row deleted in storage",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "revoke-all: every account disabled and no session rows left",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "page free of secrets after all steps",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "kill with non-uuid id -> 404 (not 500)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "kill with unknown uuid -> 404",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "state-changing POST without Origin -> 403",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "state-changing POST with foreign Origin -> 403",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "accounts list never carries cookie data or envelope",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "3 Vault import / kill / revoke (real-shaped cookies, no SID)",
+   "name": "label > 60 chars -> 4xx (not a 500 from the storage CHECK)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "AS metadata issuer = PUBLIC_BASE_URL, S256 only",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "DCR 201 with client_id, stored in oauth_clients",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "authorize signed out -> /login?next=/oauth/authorize...",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "consent page: client name + redirect host, never sees Google cookies",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "consent page free of secrets",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "Deny: 303 to client with error=access_denied + state, no code",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "Deny: browser really navigated to claude.ai, no CSP violation",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "Approve: 303 to exactly the registered redirect URI",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "Approve: browser really navigated to claude.ai (REAL hop), no CSP violation",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "Approve: callback has code + original state",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "wrong PKCE verifier rejected (4xx)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "code is burned after a failed verifier attempt",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "concurrent double-exchange of one code: at most one 200 (atomic claim via conditional UPDATE), the other is 4xx",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "token exchange 200: nlm_at_ / nlm_rt_, Bearer, 3600s, no-store",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "oauth_codes.code_hash are 64-hex",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "oauth_tokens.token_hash are 64-hex",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "stored hash = sha256(token) for the issued access + refresh tokens",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "no plaintext token/code anywhere in storage",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "oauth_codes used flag set for consumed codes",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "/api/mcp without token -> 401 + WWW-Authenticate resource_metadata",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "invalid bearer -> 401",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "initialize ok",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "tools/list returns the 17 tools (got 17), none destructive",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "API import of real-shaped export -> 201",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "accounts_list works with the issued token, lists the account, no cookie data",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "notebooks_list (Google unreachable/synthetic cookies) returns a clean tool error, no leak",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "refresh -> new access + refresh",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "new access token works",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "old refresh token is marked revoked in storage after rotation",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "grace window: immediate retry of the rotated refresh token -> 200 with a fresh pair",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "grace window: both pairs work",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "late reuse (after the 20 s window) of the rotated refresh token rejected (4xx)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "4 OAuth (real consent redirect) + MCP",
+   "name": "late reuse revokes the family (theft detection): both pairs dead",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "5 Cron and deep health (bearer)",
+   "name": "/api/cron/keepalive without bearer -> 401",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "5 Cron and deep health (bearer)",
+   "name": "/api/cron/keepalive wrong bearer -> 401",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "5 Cron and deep health (bearer)",
+   "name": "/api/health/deep without bearer -> 401",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "5 Cron and deep health (bearer)",
+   "name": "/api/health/deep wrong bearer -> 401",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "5 Cron and deep health (bearer)",
+   "name": "keepalive with CRON_SECRET -> 200 JSON, no leaks",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "5 Cron and deep health (bearer)",
+   "name": "deep health with CRON_SECRET -> JSON (200, or 503 because the synthetic account cannot reach Google: failing accounts turn the check red by design), no leaks, no names",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "5 Cron and deep health (bearer)",
+   "name": "audit_log rows contain metadata only (tool/rpc_id/outcome), no secrets",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6 Pages: console errors, CSP, hydration",
+   "name": "/ 200",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6 Pages: console errors, CSP, hydration",
+   "name": "/vault signed in 200 with accounts",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6 Pages: console errors, CSP, hydration",
+   "name": "/vault client JS hydrated (confirm UI opens)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6 Pages: console errors, CSP, hydration",
+   "name": "consent page: exactly one CSP, form-action allows https: redirect back, no unsafe-eval, frame-ancestors none",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6 Pages: console errors, CSP, hydration",
+   "name": "consent page: nosniff + DENY + no-referrer",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6 Pages: console errors, CSP, hydration",
+   "name": "consent page free of secrets",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "6 Pages: console errors, CSP, hydration",
+   "name": "no console errors/warnings, CSP violations, hydration errors on any page",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "7 Storage outage: fail closed, clean errors",
+   "name": "login with limiter store down -> 503 storage_unavailable (fail closed; Fix T4-2: not a 429 rate-limit answer)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "7 Storage outage: fail closed, clean errors",
+   "name": "...and no cookie issued",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "8 Secret scan: responses, server logs, emulator log",
+   "name": "no secret in any of 271 captured responses (bodies + headers)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "8 Secret scan: responses, server logs, emulator log",
+   "name": "server stdout/stderr readable",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "8 Secret scan: responses, server logs, emulator log",
+   "name": "server log: no passphrase / MASTER_SECRET / CRON_SECRET / service key / cookie values / OAuth tokens",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "8 Secret scan: responses, server logs, emulator log",
+   "name": "emulator request log (203 requests, full bodies): no secret / cookie value / plaintext token",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "8 Secret scan: responses, server logs, emulator log",
+   "name": "storage tables: no secret / cookie value / plaintext token anywhere",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "8 Secret scan: responses, server logs, emulator log",
+   "name": "app never triggered a PostgREST 4xx/5xx in normal operation (schema/filter/type mismatches)",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "8 Secret scan: responses, server logs, emulator log",
+   "name": "every emulator request carried the apikey header",
+   "ok": true,
+   "detail": ""
+  },
+  {
+   "step": "8 Secret scan: responses, server logs, emulator log",
+   "name": "no PATCH/DELETE without a filter was sent",
+   "ok": true,
+   "detail": ""
+  }
+ ]
+}

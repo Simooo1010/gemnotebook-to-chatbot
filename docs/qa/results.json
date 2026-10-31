@@ -1,5 +1,5 @@
 {
- "total": 137,
+ "total": 138,
  "failed": 0,
  "screenshots": 40,
  "results": [
@@ -451,7 +451,7 @@
    "step": "4 OAuth + MCP",
    "name": "401 has WWW-Authenticate Bearer + resource_metadata",
    "ok": true,
-   "detail": "Bearer error=\"invalid_token\", error_description=\"No authorization provided\", sco"
+   "detail": "Bearer scope=\"notebooklm\", resource_metadata=\"http://localhost:3000/.well-known/"
   },
   {
    "step": "4 OAuth + MCP",
@@ -487,7 +487,7 @@
    "step": "4 OAuth + MCP",
    "name": "accounts_list 200 and not an error",
    "ok": true,
-   "detail": "event: message\ndata: {\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"accounts\\\":[{\\\"id\\\":\\\"5ea44c58-9afc-4679-a878-8769d"
+   "detail": "event: message\ndata: {\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\\"accounts\\\":[{\\\"id\\\":\\\"1bed5fea-61cc-4411-92ae-edc45"
   },
   {
    "step": "4 OAuth + MCP",
@@ -515,13 +515,19 @@
   },
   {
    "step": "4 OAuth + MCP",
-   "name": "old refresh token rejected",
+   "name": "retry of a just-rotated refresh token (grace window) -> 200, family intact",
+   "ok": true,
+   "detail": "status 200"
+  },
+  {
+   "step": "4 OAuth + MCP",
+   "name": "old refresh token rejected after the grace window",
    "ok": true,
    "detail": "status 400"
   },
   {
    "step": "4 OAuth + MCP",
-   "name": "reuse of a rotated refresh token revokes the family (documented)",
+   "name": "late reuse of a rotated refresh token revokes the family (documented)",
    "ok": true,
    "detail": "status 401"
   },

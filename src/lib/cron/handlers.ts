@@ -11,6 +11,8 @@ export interface CronHandlerDeps<D> {
   env: Env;
   /** Lazy: may throw when storage is not configured (answered as 503 with a generic message). */
   getDeps: () => D;
+  /** Optional housekeeping (prune_expired). Best effort: errors are swallowed and never affect the keep-alive result. */
+  prune?: () => Promise<unknown>;
 }
 
 function unavailable(): Response {
@@ -34,6 +36,11 @@ export async function handleKeepAlive(request: Request, c: CronHandlerDeps<Sweep
     return Response.json(result, { status: failed ? 503 : 200, headers });
   } catch {
     return Response.json({ error: "keep-alive failed" }, { status: 500, headers });
+  } finally {
+    // Runs after the sweep whatever its outcome; its failure is invisible to the caller.
+    await Promise.resolve()
+      .then(() => c.prune?.())
+      .catch(() => undefined);
   }
 }
 

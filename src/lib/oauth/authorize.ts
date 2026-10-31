@@ -2,6 +2,7 @@
 import { CHALLENGE_RE, randomB64u, sha256hex } from "./crypto";
 import { CODE_TTL_MS, type OAuthDeps } from "./deps";
 import { mcpResourceUrl } from "./metadata";
+import { isTrustedRedirectUri } from "./register";
 import { SCOPE } from "./store";
 
 type Params = { get(name: string): string | null };
@@ -18,6 +19,8 @@ export interface AuthRequest {
 export interface ConsentView {
   clientName: string;
   redirectHost: string;
+  /** False when the return host is not claude.ai / claude.com: the consent page then shows a plain warning. */
+  trustedHost: boolean;
   scopeText: string;
 }
 
@@ -70,7 +73,7 @@ export async function checkAuthorizeRequest(params: Params, deps: OAuthDeps, bas
   return {
     kind: "ok",
     request: { clientId, redirectUri, codeChallenge: challenge, state, scope: SCOPE, resource },
-    view: { clientName: client.clientName, redirectHost: new URL(redirectUri).host, scopeText: SCOPE_TEXT },
+    view: { clientName: client.clientName, redirectHost: new URL(redirectUri).host, trustedHost: isTrustedRedirectUri(redirectUri), scopeText: SCOPE_TEXT },
   };
 }
 

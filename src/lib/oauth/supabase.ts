@@ -1,7 +1,8 @@
 // Supabase adapters for the OAuth store (SERVER ONLY), over the vault's tiny `Db` port.
 // Only hashes of codes/tokens are written. Atomic claims use conditional updates (row count).
+import { createHash, randomUUID } from "node:crypto";
 import { VaultStorageError, type Db, type Row } from "@/lib/vault/supabase";
-import type { ClientStore, CodeRecord, CodeStore, OAuthClient, OAuthStore, TokenRecord, TokenStore } from "./store";
+import { SCOPE, type ClientStore, type CodeRecord, type CodeStore, type OAuthClient, type OAuthStore, type TokenRecord, type TokenStore } from "./store";
 
 const PAGE = 200;
 const date = (v: unknown): Date => {
@@ -17,7 +18,14 @@ const str = (v: unknown): string => {
 function toClient(r: Row): OAuthClient {
   const uris = r.redirect_uris;
   if (!Array.isArray(uris) || !uris.every((u) => typeof u === "string")) throw new VaultStorageError();
-  return { clientId: str(r.client_id), redirectUris: uris as string[], clientName: str(r.client_name), createdAt: date(r.created_at) };
+  return {
+    clientId: str(r.client_id),
+    redirectUris: uris as string[],
+    clientName: str(r.client_name),
+    createdAt: date(r.created_at),
+    ipHash: typeof r.ip_hash === "string" ? r.ip_hash : null,
+    hasToken: r.has_token === true,
+  };
 }
 
 function toCode(r: Row): CodeRecord {
@@ -45,14 +53,29 @@ function toToken(r: Row): TokenRecord {
     expiresAt: date(r.expires_at),
     familyId: str(r.family_id),
     revokedAt: r.revoked === false ? null : r.revoked_at ? date(r.revoked_at) : new Date(0),
+    rotated: r.rotated === true,
     createdAt: date(r.created_at),
   };
 }
 
 class Clients implements ClientStore {
   constructor(private readonly db: Db) {}
-  async count() {
-    return (await this.list()).length;
+  async countLive(since: Date) {
+    if (!this.db.count) {
+      return (await this.list()).filter((c) => c.hasToken || c.createdAt.getTime() >= since.getTime()).length;
+    }
+    const withToken = await this.db.count("oauth_clients", { match: { has_token: true } });
+    const fresh = await this.db.count("oauth_clients", { match: { has_token: false }, gte: { created_at: since.toISOString() } });
+    return withToken + fresh;
+  }
+  async countRecentByIp(ipHash: string, since: Date) {
+    if (!this.db.count) {
+      return (await this.list()).filter((c) => c.ipHash === ipHash && c.createdAt.getTime() >= since.getTime()).length;
+    }
+    return this.db.count("oauth_clients", { match: { ip_hash: ipHash }, gte: { created_at: since.toISOString() } });
+  }
+  async markHasToken(id: string) {
+    await this.db.update("oauth_clients", { client_id: id, has_token: false }, { has_token: true });
   }
   async insert(c: OAuthClient) {
     await this.db.insert("oauth_clients", {
@@ -60,6 +83,8 @@ class Clients implements ClientStore {
       redirect_uris: c.redirectUris,
       client_name: c.clientName,
       created_at: c.createdAt.toISOString(),
+      ip_hash: c.ipHash ?? null,
+      has_token: c.hasToken === true,
     });
   }
   async get(id: string) {
@@ -115,6 +140,7 @@ class Tokens implements TokenStore {
       family_id: t.familyId,
       revoked: t.revokedAt !== null,
       revoked_at: t.revokedAt?.toISOString() ?? null,
+      rotated: t.rotated === true,
       created_at: t.createdAt.toISOString(),
     });
   }
@@ -125,11 +151,29 @@ class Tokens implements TokenStore {
   private revoke(match: Row, at: Date) {
     return this.db.update("oauth_tokens", { ...match, revoked: false }, { revoked: true, revoked_at: at.toISOString() });
   }
-  async claim(hash: string, at: Date) {
-    return (await this.revoke({ token_hash: hash }, at)) === 1;
+  async claim(hash: string, at: Date, rotated = false) {
+    const n = await this.db.update("oauth_tokens", { token_hash: hash, revoked: false }, { revoked: true, revoked_at: at.toISOString(), rotated });
+    return n === 1;
   }
   async revokeFamily(familyId: string, at: Date) {
     await this.revoke({ family_id: familyId }, at);
+  }
+  async tombstoneFamily(familyId: string, clientId: string, at: Date) {
+    await this.insert({
+      tokenHash: createHash("sha256").update(`tombstone:${randomUUID()}`).digest("hex"), // 64-hex like every stored hash; never a real token
+      kind: "access",
+      clientId,
+      scope: SCOPE,
+      expiresAt: new Date(at.getTime() + 3_600_000),
+      familyId,
+      revokedAt: at,
+      rotated: false,
+      createdAt: at,
+    });
+  }
+  async familyRevoked(familyId: string) {
+    const rows = await this.db.select("oauth_tokens", { match: { family_id: familyId, revoked: true, rotated: false }, from: 0, to: 0 });
+    return rows.length > 0;
   }
   async revokeClient(clientId: string, at: Date) {
     await this.revoke({ client_id: clientId }, at);
