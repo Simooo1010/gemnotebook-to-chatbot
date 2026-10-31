@@ -53,7 +53,7 @@ src/lib/auth/session.ts   owner session cookie (HMAC, 12 h) + same-origin check 
 src/lib/owner/            request handlers for login/logout/vault API with injected deps (+ test); deps.ts = production wiring
 src/app/api/owner/        POST login, POST logout
 src/app/api/vault/        accounts (GET list, POST import), accounts/[id]/kill, revoke-all
-src/app/login, src/app/vault  owner login page and vault page (+ small client forms)
+src/app/login, src/app/vault  owner login page and vault page (+ small client forms); src/app/vault/AccountCard.tsx = account card incl. "Session unreadable" badge (+ test)
 src/lib/rpc/              pure batchexecute codec, params builders, row decoders (+ tests)
 src/lib/google/           transport: throttle, http (manual redirects), tokens, keep-alive, client (rpc + chatStream), probe.ts (+ tests)
 src/lib/notebooklm/       typed operations: created.ts (created_objects: notebooks, sources, artifacts), notebooks.ts, sources.ts (add URL/YouTube/text/Drive, source text + guide; reconcile, no double add), studio.ts (audio/video overviews, status, fresh media lookup; reconcile, caps), media-link.ts (signed download tokens, own key context), media-download.ts (fresh-URL streaming + 60 s URL memo + GET handler logic), chat.ts (ask with citations: ready-source pre-flight, cumulative-chunk answer, citations mapped to source titles, conversation id) (+ tests)
@@ -82,7 +82,7 @@ supabase/                 migrations (0001_vault.sql, 0002_oauth.sql, 0003_harde
 ## Where this runs
 - Development in Claude Code on the web (cloud sandbox). No local machine.
 - Secrets: sandbox environment variables + Vercel environment variables. Never in repo files.
-- Owner tests on **preview URLs**, adding the preview's MCP URL as a custom connector.
+- Owner tests on the **production URL** `https://gemnotebook-to-chatbot.vercel.app` (previews are not functional: no service key, SSO-protected), adding `<production URL>/api/mcp` as a custom connector.
 
 ## Hard rules
 - Never commit secrets. Only `.env.example` is committed. Never print secret values — including Google cookies, tokens and the encryption key. Never log request/response bodies that can contain them.

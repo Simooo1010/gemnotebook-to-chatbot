@@ -1,6 +1,6 @@
 # Connect Claude to your notebooks
 
-Status: Steps 4 to 7 code is complete but **not yet verified against a real claude.ai connector or a real Google account** (needs a deploy with the owner's environment variables first, see `SETUP-FOR-OWNER.md`).
+Status: deployed to production and the connector reaches the consent page. **Not yet verified end to end with a real Google account** (import an account, then run the live checks in `SETUP-FOR-OWNER.md`).
 
 ## The MCP URL
 
@@ -8,7 +8,7 @@ Status: Steps 4 to 7 code is complete but **not yet verified against a real clau
 <base>/api/mcp
 ```
 
-`<base>` is the public HTTPS address of the deployment, the same value as `PUBLIC_BASE_URL` (for example `https://your-project.vercel.app`). For a preview build use that preview's address. Vercel Authentication must be off for the address you use, because OAuth protects `/api/mcp` instead.
+`<base>` is the public HTTPS address of the deployment, the same value as `PUBLIC_BASE_URL` (for example `https://your-project.vercel.app`). Use the production address (preview builds are not functional: no service key, and they are login-protected). Vercel Authentication must be off for the address you use, because OAuth protects `/api/mcp` instead.
 
 ## Add it in claude.ai
 

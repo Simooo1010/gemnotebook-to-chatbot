@@ -67,6 +67,12 @@ describe("batchexecute encoding", () => {
     expect(buildChatUrl({ base: "https://h", bl: "b", reqId: 100000, fsid: "9" })).toBe(
       "https://h/_/LabsTailwindUi/data/google.internal.labs.tailwind.orchestration.v1.LabsTailwindOrchestrationService/GenerateFreeFormStreamed?bl=b&hl=en&_reqid=100000&rt=c&f.sid=9",
     );
+    // T3-11: no bare `bl=` when the homepage had no cfb2h
+    for (const bl of [undefined, ""]) {
+      const u = buildChatUrl({ base: "https://h", bl, reqId: 100000, fsid: "9" });
+      expect(u).not.toMatch(/[?&]bl=/);
+      expect(u).toContain("hl=en&_reqid=100000&rt=c&f.sid=9");
+    }
     expect(encodeChatBody({ params: ["q"], at: "t" })).toBe("f.req=" + encodeURIComponent('[null,"[\\"q\\"]"]') + "&at=t&");
   });
 });

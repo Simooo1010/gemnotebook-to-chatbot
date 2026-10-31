@@ -59,7 +59,7 @@ describe("rows", () => {
     expect(R.decodeNotebookSummary(N, "VfAZjd")).toBeNull();
     expect(R.decodeSourceGuide([[[N, ["Guide"], [["k1", "k2"]]]]], "tr032e")).toEqual({ summary: "Guide", keywords: ["k1", "k2"] });
     expect(() => R.decodeSourceGuide([[[N]]], "tr032e")).toThrow(RpcDriftError);
-    expect(R.decodeSourceText([[N, "Title"], N, N, [[["Hello ", [["wor", "ld"]]]]]], "hizoJc")).toEqual({ title: "Title", text: "Hello world" });
+    expect(R.decodeSourceText([[N, "Title"], N, N, [[[0, 11, [[[0, 6, ["Hello ", [N, N, N, ""]]], [6, 11, ["world"]]], [N, 1]]]]]], "hizoJc")).toEqual({ title: "Title", text: "Hello world" });
     expect(() => R.decodeSourceText([[N, "T"]], "hizoJc")).toThrow(RpcDriftError);
     expect(R.decodeLastConversationId([[["conv1"]]], "hPTbtc")).toBe("conv1");
   });
@@ -89,7 +89,7 @@ const chunk = (text: string, final: boolean, cites: unknown[] = [], marker = 1) 
   N,
   JSON.stringify([[text, N, ["stream", "turn"], N, [N, N, N, cites, marker]], N, N, N, final, [["Next?"]]]),
 ];
-const cite = (src: string, frag: string) => [["chunk-" + frag], [N, N, 0.9, [[N, 10, 20]], [[[N, frag]]], [[[src]]]]];
+const cite = (src: string, frag: string) => [["chunk-" + frag], [N, N, 0.9, [[N, 10, 20]], [[[0, 1, [[[0, 1, [frag, []]]], [N, 1]]]]], [[[src]]]]];
 
 describe("chat", () => {
   it("picks final cumulative chunk and maps citations", () => {
@@ -117,5 +117,20 @@ describe("chat", () => {
     expect(() => parseChatResponse(chatWire(["wrb.fr", N, N, N, N, [3]]))).toThrow(RpcStatusError);
     expect(() => parseChatResponse(chatWire(["wrb.fr", N, N, N, N, [16]]))).toThrow(RpcAuthError);
     expect(() => parseChatResponse("<html></html>")).toThrow(RpcNoFramesError);
+  });
+});
+
+describe("empty lists are not drift (T3-1)", () => {
+  it.each([[[]], [null], [[null]], [[[]]]])("notebooks / artifacts / conversation id for %j", (shape) => {
+    expect(R.decodeNotebookList(shape, "wXbhsf")).toEqual([]);
+    expect(R.decodeArtifactList(shape, "gArtLc")).toEqual([]);
+    expect(R.decodeLastConversationId(shape, "hPTbtc")).toBeNull();
+  });
+  it("genuine shape drift still raises", () => {
+    expect(() => R.decodeNotebookList("oops", "wXbhsf")).toThrow(RpcDriftError);
+    expect(() => R.decodeNotebookList([["not-a-row"]], "wXbhsf")).toThrow(RpcDriftError);
+    expect(() => R.decodeArtifactList({ a: 1 }, "gArtLc")).toThrow(RpcDriftError);
+    expect(() => R.decodeArtifactList([5], "gArtLc")).toThrow(RpcDriftError);
+    expect(() => R.decodeLastConversationId("oops", "hPTbtc")).toThrow(RpcDriftError);
   });
 });

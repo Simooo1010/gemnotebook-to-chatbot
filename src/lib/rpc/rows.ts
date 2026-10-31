@@ -36,11 +36,6 @@ const optNum = (v: unknown, p: readonly number[]) => {
   const x = optIndex(v, p);
   return typeof x === "number" ? x : null;
 };
-function arr(v: unknown, path: readonly number[], rpcId: string): unknown[] {
-  const x = safeIndex(v, path, rpcId);
-  if (!Array.isArray(x)) throw new RpcDriftError(rpcId, [], fmt(path));
-  return x;
-}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -60,6 +55,42 @@ export function collectStrings(v: unknown, out: string[] = [], depth = 0): strin
   if (typeof v === "string") out.push(v);
   else if (Array.isArray(v) && depth < 64) for (const x of v) collectStrings(x, out, depth + 1);
   return out;
+}
+
+function isSpan(v: unknown): v is [number, number, [string, ...unknown[]]] {
+  return (
+    Array.isArray(v) &&
+    typeof v[0] === "number" &&
+    typeof v[1] === "number" &&
+    Array.isArray(v[2]) &&
+    typeof v[2][0] === "string"
+  );
+}
+
+function spanText(v: unknown, out: string[], depth = 0): void {
+  if (isSpan(v)) out.push(v[2][0]);
+  else if (Array.isArray(v) && depth < 64) for (const x of v) spanText(x, out, depth + 1);
+}
+
+/**
+ * Text of a document block tree (source text `hizoJc` result[3][0], chat citation `cite[1][4][0]`).
+ * A block is `[start, end, [[leaf spans...], [kind]], ...]`, a leaf span is `[start, end, [text, style...]]`.
+ * Only `span[2][0]` is text: every other string in the tree is a list marker, link href or style info.
+ * Spans of one block are joined without separator (their ranges are contiguous), blocks with "\n".
+ * PY reference: notebooklm-py `_web/rows/documents.py::build_blocks`.
+ */
+export function blockTreeText(tree: unknown): string {
+  const blocks: string[] = [];
+  const walk = (node: unknown, depth: number) => {
+    if (!Array.isArray(node) || depth > 8) return;
+    if (typeof node[0] === "number" && typeof node[1] === "number") {
+      const parts: string[] = [];
+      spanText(node, parts);
+      blocks.push(parts.join(""));
+    } else for (const x of node) walk(x, depth + 1); // wrapper lists around the blocks
+  };
+  walk(tree, 0);
+  return blocks.join("\n");
 }
 
 // --- notebooks ---
@@ -87,9 +118,25 @@ export function decodeNotebookRow(row: unknown, rpcId: string): Notebook {
   };
 }
 
+/**
+ * Google answers "nothing yet" as `[]`, null, `[null]` or `[[]]` (real captures: notebooklm-py
+ * artifacts_list_empty.yaml). All of these mean an empty list; anything that is not an array at all, or a
+ * non-empty `result[0]` that is not a list, is still shape drift.
+ */
+function isNothingYet(v: unknown): boolean {
+  return v === null || v === undefined || (Array.isArray(v) && v.every(isNothingYet));
+}
+
+function rowsOf(result: unknown, rpcId: string): unknown[] {
+  if (isNothingYet(result)) return [];
+  const rows = safeIndex(result, [0], rpcId);
+  if (isNothingYet(rows)) return [];
+  if (!Array.isArray(rows)) throw new RpcDriftError(rpcId, [], fmt([0]));
+  return rows;
+}
+
 export function decodeNotebookList(result: unknown, rpcId: string): Notebook[] {
-  if (optIndex(result, [0]) === null) return [];
-  return arr(result, [0], rpcId).map((r) => decodeNotebookRow(r, rpcId));
+  return rowsOf(result, rpcId).map((r) => decodeNotebookRow(r, rpcId));
 }
 
 export function decodeCreateNotebook(result: unknown, rpcId: string): { id: string } {
@@ -171,7 +218,7 @@ export function decodeNotebookSummary(
   result: unknown,
   rpcId: string,
 ): { summary: string; suggestedQuestions: { question: string; prompt: string | null }[] } | null {
-  if (result === null) return null;
+  if (isNothingYet(result)) return null;
   const qs = optIndex(result, [0, 1, 0]);
   return {
     summary: str(result, [0, 0, 0], rpcId),
@@ -191,13 +238,14 @@ export function decodeSourceGuide(result: unknown, rpcId: string): { summary: st
 
 export function decodeSourceText(result: unknown, rpcId: string): { title: string | null; text: string } {
   const tree = safeIndex(result, [3, 0], rpcId);
-  return { title: optStr(result, [0, 1]), text: collectStrings(tree).join("") };
+  return { title: optStr(result, [0, 1]), text: blockTreeText(tree) };
 }
 
 export function decodeLastConversationId(result: unknown, rpcId: string): string | null {
-  if (result === null) return null;
+  if (isNothingYet(result)) return null;
+  if (!Array.isArray(result)) throw new RpcDriftError(rpcId, [], "<root>");
+  // Any shape without a string at [0][0][0] means "no conversation yet" (notebooklm-py returns None).
   const v = optIndex(result, [0, 0, 0]);
-  if (v === undefined) throw new RpcDriftError(rpcId, [], "[0][0][0]");
   return typeof v === "string" ? v : null;
 }
 
@@ -258,10 +306,7 @@ export function decodeArtifactRow(row: unknown, rpcId: string): Artifact {
 }
 
 export function decodeArtifactList(result: unknown, rpcId: string): Artifact[] {
-  if (result === null) return [];
-  const rows = optIndex(result, [0]);
-  if (rows === null) return [];
-  const list = arr(result, [0], rpcId);
+  const list = rowsOf(result, rpcId);
   // "result[0] = rows (or a flat list)": a flat list means result[0] is itself a row.
   const isFlat = typeof list[0] === "string";
   return (isFlat ? [list] : list).map((r) => decodeArtifactRow(r, rpcId));

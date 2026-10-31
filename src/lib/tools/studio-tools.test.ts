@@ -215,7 +215,9 @@ describe("studio through the real runtime (fake fetch)", () => {
     expect((await r.arrayBuffer()).byteLength).toBe(64);
     const last = s.calls.at(-1)!;
     expect(last.url).toBe(GOOGLE_URL); // the fresh URL from the re-list, used only server side
-    expect(last.init.headers!.Cookie).toBeUndefined(); // the synthetic jar only has .google.com cookies: none goes to googleusercontent.com
+    expect(last.init.headers!.Cookie).toContain(`SID=${SYN_SID}`); // T3-8: media-only view re-scopes the .google.com session cookies onto googleusercontent.com
+    expect(last.init.headers!.Referer).toBe("https://notebook.google.com/"); // T3-7
+    expect(last.init.headers!["Sec-Fetch-Site"]).toBe("cross-site");
     expect(s.calls[2]!.init.headers!.Cookie).toContain(`SID=${SYN_SID}`); // ...while the notebook.google.com list call carried them
     expect(s.audit.rows.map((x) => x.tool)).toContain("media_download");
     expect(JSON.stringify(s.audit.rows)).not.toMatch(/SECRET|googleusercontent|SID/);

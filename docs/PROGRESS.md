@@ -97,3 +97,21 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
 - **T2-4 / T2-5 (CORS + headers):** Allow-Headers + `Mcp-Session-Id, Accept, Last-Event-ID`, Allow-Methods + DELETE, Expose-Headers `WWW-Authenticate, Mcp-Session-Id`; 401 without Authorization carries no `error=`; `/oauth/token` invalid_client has a WWW-Authenticate challenge; `tools.listChanged` cleared on the SDK server object (the SDK sets it unconditionally and mcp-handler has no option; pinned by a test).
 - **T4-2:** login with missing/failing storage is 503 `storage_unavailable` (429 only for a real limit); `/api/health` adds `storage` (boolean) and is `ok:false` in production without SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY.
 
+
+- **Real-data fix loop, branch `fix/real-data` (Tester 3: 20 sanitized REAL notebooklm-py captures, `differential.real.test.ts`; every fixed id flipped from `it.fails` to a passing `it`):**
+  - T3-1 (BLOCKER) fixed: `[]`, null, `[null]`, `[[]]` decode to an empty list for notebooks, artifacts, last conversation id, summary; first audio/video overview on a notebook with no artifacts and `studio_status` now work (operation-level test with the real `[]` shape). Genuine drift still raises.
+  - T3-2/T3-3 fixed: source text and citation excerpts take only `span[2][0]` (real source: 8407 clean chars instead of 11414; no URLs in the 7 real citations).
+  - T3-4 fixed: HTTP 400 (expired `at`) is an auth failure; reads refresh tokens once and retry once, mutations/chat keep no-retry (homepage probe decides needs_reauth vs StaleTokenMutationError); a 400 that survives fresh tokens is an HttpStatusError.
+  - T3-5 fixed: notebook rename uses source-path `/`.
+  - T3-6 fixed: Drive add reconciles by type + created time (+ file id when the row links one), not title.
+  - T3-7/T3-8 fixed (live-unverified, evidence-backed): media GET sends `Referer {base}/` + `Sec-Fetch-Site: cross-site`; media-only in-memory cookie view re-scopes domain-wide `.google.com` cookies (minus OSID/__Secure-OSID, host-only) onto `*.googleusercontent.com`, never stored, never for other hosts (security regression tests in `media-cookies.test.ts`).
+  - T3-9 fixed: chat response cap 2 MiB -> 8 MiB (configurable).
+  - T3-11 fixed: no empty `bl=`; RotateCookies sends the browser UA.
+  - NOT fixed, by decision: T3-10 (follow-up `history=null`, no real follow-up capture; `it.todo`), and the SID/cookie question (owner's live run decides).
+- **Platform requirement (T5-6):** `/api/mcp` and `/api/media/[token]` now declare `maxDuration = 300`. This needs Vercel **Fluid Compute** (Hobby maximum 300 s; on by default for projects created after 2025-04-23, confirm under Project -> Settings -> Functions). If a deployment fails because of this value, revert the two lines.
+- **Fix loop A (platform, from tester 5):**
+  - T5-2 fixed: keep-alive and deep health answer 503 (statuses only) when any account is error/needs_reauth; workflow uses `--max-time 60`, logs the HTTP status, fails on non-2xx.
+  - T5-6 fixed: `maxDuration = 300` on `/api/mcp` and `/api/media/[token]` (needs Fluid Compute, see note above).
+  - T5-13 fixed: vault list has `sessionReadable`; /vault shows 'Session unreadable - re-import this account'; keep-alive reports `error` + reason `unreadable_session`.
+  - T5-11 fixed (docs): production-only secrets and testing, CONNECT status, SPEC §4 keep-alive text + decision-log row, SETUP g notes (APP_URL / CRON_SECRET, 60-day rule, default branch).
+  - Not in this PR: T5-1 (owner: set GitHub default branch to `main`), T5-3/4/5/7/12 (other fixer).

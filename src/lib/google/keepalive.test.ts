@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadKeyring } from "@/lib/vault/crypto";
 import { MemoryAccountRepo, MemorySessionVault } from "@/lib/vault/memory";
 import { createVault } from "@/lib/vault/vault";
+import { CHROME_UA } from "./http";
 import { ROTATE_BODY, createRotationLimiter, keepAliveAccount, rotateCookies } from "./keepalive";
 import { SYN_SID, fakeClock, homepageHtml, res, scriptedFetch, synthJar } from "./testing";
 
@@ -23,6 +24,8 @@ describe("rotateCookies", () => {
     expect(calls[0]!.init.body).toBe(ROTATE_BODY);
     expect(ROTATE_BODY).toBe('[000,"-0000000000000000000"]');
     expect(calls[0]!.init.headers).toMatchObject({ "Content-Type": "application/json", Origin: "https://accounts.google.com" });
+    // T3-11: same browser identity as the other requests (not Node's default UA)
+    expect(calls[0]!.init.headers).toMatchObject({ "User-Agent": CHROME_UA, "Accept-Language": "en-US,en;q=0.9" });
     expect(calls[0]!.init.signal).toBeDefined();
     expect(r1.jar.cookies.find((c) => c.name === "SIDCC")!.value).toBe("rot1");
     clock.advance(59_000);

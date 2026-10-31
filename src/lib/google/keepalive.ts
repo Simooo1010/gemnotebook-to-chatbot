@@ -1,7 +1,7 @@
 import type { CookieJar } from "@/lib/vault/jar";
 import type { AccountRepo } from "@/lib/vault/storage";
 import { CookieMismatchError, RotateAuthError, SignedOutError } from "./errors";
-import { fetchWithJar, type FetchLike } from "./http";
+import { CHROME_UA, fetchWithJar, type FetchLike } from "./http";
 import { fetchPageTokens } from "./session";
 
 export const ROTATE_URL = "https://accounts.google.com/RotateCookies";
@@ -58,7 +58,13 @@ export async function rotateCookies(i: RotateInput): Promise<{ jar: CookieJar; r
     ROTATE_URL,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json", Origin: "https://accounts.google.com" },
+      headers: {
+        // Same browser identity as every other request (every recorded real call used a browser UA, never Node's default).
+        "User-Agent": CHROME_UA,
+        "Accept-Language": "en-US,en;q=0.9",
+        "Content-Type": "application/json",
+        Origin: "https://accounts.google.com",
+      },
       body: ROTATE_BODY,
       signal: AbortSignal.timeout(i.timeoutMs ?? ROTATE_TIMEOUT_MS),
     },

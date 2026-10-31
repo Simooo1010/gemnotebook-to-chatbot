@@ -35,7 +35,9 @@ export function encodeBatchBody(i: { rpcId: string; params: unknown; at: string 
 
 export interface ChatUrlInput {
   base: string;
-  bl: string;
+  /** Omitted from the URL when empty/undefined (the server does not validate it; never send a bare `bl=`). */
+  bl?: string;
+
   reqId: number;
   fsid?: string;
   authuser?: string | number;
@@ -44,7 +46,7 @@ export interface ChatUrlInput {
 
 export function buildChatUrl(i: ChatUrlInput): string {
   const q = new URLSearchParams();
-  q.set("bl", i.bl);
+  if (i.bl) q.set("bl", i.bl);
   q.set("hl", i.hl ?? "en");
   q.set("_reqid", String(i.reqId));
   q.set("rt", "c");

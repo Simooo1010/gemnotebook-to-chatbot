@@ -119,6 +119,18 @@ export interface AccountView {
   createdAt: string;
   /** Number of distinct cookie NAMES in the stored session (null when none/unreadable). Never values. */
   cookieNameCount: number | null;
+  /**
+   * false when an ACTIVE account's stored session cannot be decrypted or parsed (for example MASTER_SECRET /
+   * VAULT_ENCRYPTION_KEY changed) or is missing. Derived on read: the stored status is never changed and no
+   * detail about the failure is exposed.
+   */
+  sessionReadable: boolean;
+}
+
+/** Decrypt / parse / missing-session failures: the stored session is unusable until re-imported. */
+function isUnreadableSession(e: unknown): boolean {
+  if (isJarError(e) || isVaultError(e) || e instanceof SyntaxError) return true;
+  return e instanceof Error && e.name === "VaultCryptoError";
 }
 
 export async function listAccountViews(vault: Vault): Promise<AccountView[]> {
@@ -126,14 +138,17 @@ export async function listAccountViews(vault: Vault): Promise<AccountView[]> {
   return Promise.all(
     accounts.map(async (a) => {
       let cookieNameCount: number | null = null;
+      let sessionReadable = true;
       if (a.status === "active") {
         try {
           cookieNameCount = jarSummary(await vault.getJar(a.id)).names.length;
-        } catch {
+        } catch (e) {
           cookieNameCount = null;
+          // Other failures (storage briefly unreachable) are unknown, not "unreadable": do not alarm the owner.
+          if (isUnreadableSession(e)) sessionReadable = false;
         }
       }
-      return { id: a.id, label: a.label, status: a.status, createdAt: a.createdAt.toISOString(), cookieNameCount };
+      return { id: a.id, label: a.label, status: a.status, createdAt: a.createdAt.toISOString(), cookieNameCount, sessionReadable };
     }),
   );
 }
@@ -195,7 +210,7 @@ export async function handleImport(request: Request, deps: OwnerDeps): Promise<R
   try {
     const { account, summary } = await vault.connectAccount(label, parsed);
     return json(201, {
-      account: { id: account.id, label: account.label, status: account.status, createdAt: account.createdAt.toISOString(), cookieNameCount: summary.names.length },
+      account: { id: account.id, label: account.label, status: account.status, createdAt: account.createdAt.toISOString(), cookieNameCount: summary.names.length, sessionReadable: true },
     });
   } catch (e) {
     if (isJarError(e)) {

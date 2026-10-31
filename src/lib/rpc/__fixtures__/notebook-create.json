@@ -1,0 +1,6 @@
+{
+ "source": "teng-lin/notebooklm-py @0fcc842 tests/cassettes/web/cli_notebook_create.yaml (recorded, SANITIZED: ids -> synthetic uuids, free text -> same-length filler, URLs -> example.com / synthetic lh3)",
+ "rpcId": "CCqFvf",
+ "note": "create response row; id at [2]",
+ "body": ")]}'\n\n320\n[[\"wrb.fr\",\"CCqFvf\",\"[\\\"Lpl Lpl Lplx Lplxotpx\\\",null,\\\"00000000-0000-4000-8000-000000000016\\\",null,null,[1,false,true,null,null,null,1,null,null,null,null,null,false],null,null,null,null,null,[[\\\"00000000-0000-4000-8000-000000000017\\\"]]]\",null,null,null,\"generic\"],[\"di\",238],[\"af.httprm\",238,\"-8017365380658002222\",11]]\n23\n[[\"e\",4,null,null,358]]\n"
+}
