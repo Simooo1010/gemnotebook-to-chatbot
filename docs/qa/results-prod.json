@@ -490,7 +490,7 @@
   },
   {
    "step": "5 Cron and deep health (bearer)",
-   "name": "deep health with CRON_SECRET -> 200 JSON, no leaks, no names",
+   "name": "deep health with CRON_SECRET -> JSON (200, or 503 because the synthetic account cannot reach Google: failing accounts turn the check red by design), no leaks, no names",
    "ok": true,
    "detail": ""
   },

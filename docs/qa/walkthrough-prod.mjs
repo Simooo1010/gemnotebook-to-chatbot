@@ -436,7 +436,7 @@ try {
     check("keepalive with CRON_SECRET -> 200 JSON, no leaks", ka.status === 200 && ka.text.startsWith("{") && leaks(ka.text).length === 0 && !/QA mcp account/.test(ka.text), `status ${ka.status} ${ka.text.slice(0, 120)}`);
     console.log("      keepalive body:", ka.text.slice(0, 260));
     const dp = await apiText("/api/health/deep", { headers: { authorization: `Bearer ${CRON}` } });
-    check("deep health with CRON_SECRET -> 200 JSON, no leaks, no names", dp.status === 200 && dp.text.startsWith("{") && leaks(dp.text).length === 0 && !/QA mcp account/.test(dp.text), `status ${dp.status} ${dp.text.slice(0, 120)}`);
+    check("deep health with CRON_SECRET -> JSON (200, or 503 because the synthetic account cannot reach Google: failing accounts turn the check red by design), no leaks, no names", (dp.status === 200 || dp.status === 503) && dp.text.startsWith("{") && leaks(dp.text).length === 0 && !/QA mcp account/.test(dp.text), `status ${dp.status} ${dp.text.slice(0, 120)}`);
     console.log("      deep body:", dp.text.slice(0, 260));
     const t = await emu("/__qa/tables");
     check("audit_log rows contain metadata only (tool/rpc_id/outcome), no secrets", t.audit_log.every((r) => Object.keys(r).sort().join() === "account_id,at,id,outcome,rpc_id,tool") && leaks(JSON.stringify(t.audit_log)).length === 0 && !/SYNTHETIC/.test(JSON.stringify(t.audit_log)));
