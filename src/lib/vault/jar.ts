@@ -20,6 +20,20 @@ export interface CookieJar {
 }
 
 export const REQUIRED_COOKIES = ["SID", "__Secure-1PSIDTS"] as const;
+/**
+ * The primary session cookie is the legacy `SID` OR its secure twin `__Secure-1PSID`: newer Google sessions
+ * carry only the secure one (observed in a real export, 2026-10-31). `__Secure-1PSIDTS` is always required.
+ */
+export const PRIMARY_SESSION_COOKIES = ["SID", "__Secure-1PSID"] as const;
+
+/** Names of required cookies that are absent (names only). For the primary session cookie the reported name is `SID`. */
+export function missingRequiredCookies(names: Iterable<string>): string[] {
+  const have = new Set(names);
+  const missing: string[] = [];
+  if (!PRIMARY_SESSION_COOKIES.some((n) => have.has(n))) missing.push("SID");
+  if (!have.has("__Secure-1PSIDTS")) missing.push("__Secure-1PSIDTS");
+  return missing;
+}
 export const MAX_COOKIES = 200;
 export const MAX_VALUE_BYTES = 8 * 1024;
 
@@ -113,7 +127,7 @@ export function parseCookieExport(json: unknown): CookieJar {
   const cookies = [...map.values()];
   if (cookies.length > MAX_COOKIES) throw new JarError("too_many_cookies");
   const names = new Set(cookies.map((c) => c.name));
-  const missing = REQUIRED_COOKIES.filter((n) => !names.has(n));
+  const missing = missingRequiredCookies(names);
   if (missing.length) throw new JarError("missing_required", missing);
   return { cookies };
 }
@@ -237,5 +251,5 @@ export function jarSummary(jar: CookieJar): JarSummary {
   const domains: Record<string, number> = {};
   for (const c of jar.cookies) domains[c.domain] = (domains[c.domain] ?? 0) + 1;
   const names = [...new Set(jar.cookies.map((c) => c.name))].sort();
-  return { count: jar.cookies.length, names, domains, hasRequired: REQUIRED_COOKIES.every((n) => names.includes(n)) };
+  return { count: jar.cookies.length, names, domains, hasRequired: missingRequiredCookies(names).length === 0 };
 }
