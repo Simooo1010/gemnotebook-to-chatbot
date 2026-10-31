@@ -177,6 +177,25 @@ describe("handlers", () => {
     }
   });
 
+  it("keep-alive: prune runs after the sweep, also after a failed sweep, never on 401/503, and its errors never change the response", async () => {
+    let pruned = 0;
+    const prune = async () => void pruned++;
+    expect((await handleKeepAlive(req(), { env, getDeps: sweepDeps, prune })).status).toBe(401);
+    expect((await handleKeepAlive(req(`Bearer ${SECRET}`), { env, getDeps: () => { throw new Error("x"); }, prune })).status).toBe(503);
+    expect(pruned).toBe(0);
+    const ok = await handleKeepAlive(req(`Bearer ${SECRET}`), { env, getDeps: sweepDeps, prune });
+    expect(ok.status).toBe(200);
+    expect(pruned).toBe(1);
+    const failedSweep = await handleKeepAlive(req(`Bearer ${SECRET}`), { env, getDeps: () => ({ ...sweepDeps(), vault: { ...sweepDeps().vault, listAccounts: async () => Promise.reject(new Error("db")) } }), prune });
+    expect(failedSweep.status).toBe(500);
+    expect(pruned).toBe(2);
+    for (const bad of [async () => Promise.reject(new Error("rpc down")), () => { throw new Error("sync"); }]) {
+      const r = await handleKeepAlive(req(`Bearer ${SECRET}`), { env, getDeps: sweepDeps, prune: bad as () => Promise<unknown> });
+      expect(r.status).toBe(200);
+      expect(((await r.json()) as { processed: number }).processed).toBe(1);
+    }
+  });
+
   it("keep-alive: unconfigured storage is a generic 503; a crash is a generic 500", async () => {
     const a = await handleKeepAlive(req(`Bearer ${SECRET}`), {
       env,

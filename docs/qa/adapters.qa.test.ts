@@ -3,14 +3,14 @@
 // pagination beyond one page, persistent login limiter under a parallel burst, OAuth store atomicity, error mapping.
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createServiceDb, SupabaseAccountRepo, SupabaseSessionVault, VaultStorageError } from "@/lib/vault/supabase";
 import { SupabaseCreatedObjects } from "@/lib/notebooklm/created";
 import { SupabaseAuditSink, SupabaseUsageCounter } from "@/lib/google/supabase";
 import { createPersistentLoginLimiter } from "@/lib/auth/login-limiter";
 import { createSupabaseStore } from "@/lib/oauth/supabase";
 
-const PORT = 3411, KEY = "adapters-test-service-key";
+const PORT = 3411, KEY = "adapters-test-service-key", ANON = "adapters-test-anon-key";
 const EMU = `http://127.0.0.1:${PORT}`;
 let proc: ChildProcess;
 const db = () => createServiceDb({ SUPABASE_URL: EMU, SUPABASE_SERVICE_ROLE_KEY: KEY });
@@ -19,7 +19,7 @@ const tables = async () => (await (await fetch(EMU + "/__qa/tables")).json()) as
 const uuid = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
 
 beforeAll(async () => {
-  proc = spawn(process.execPath, [path.resolve(__dirname, "fake-supabase.mjs")], { env: { ...process.env, FAKE_SB_PORT: String(PORT), FAKE_SB_KEY: KEY }, stdio: "ignore" });
+  proc = spawn(process.execPath, [path.resolve(__dirname, "fake-supabase.mjs")], { env: { ...process.env, FAKE_SB_PORT: String(PORT), FAKE_SB_KEY: KEY, FAKE_SB_ANON_KEY: ANON }, stdio: "ignore" });
   await new Promise((r) => setTimeout(r, 700));
 });
 afterAll(() => proc.kill());
@@ -156,7 +156,7 @@ describe("oauth store", () => {
     const now = new Date();
     await s.clients.insert({ clientId: "cl1", redirectUris: ["https://claude.ai/api/mcp/auth_callback"], clientName: "Claude", createdAt: now });
     expect((await s.clients.get("cl1"))?.redirectUris).toEqual(["https://claude.ai/api/mcp/auth_callback"]);
-    expect(await s.clients.count()).toBe(1);
+    expect(await s.clients.countLive(new Date(0))).toBe(1);
     const code = { codeHash: "e".repeat(64), clientId: "cl1", redirectUri: "https://claude.ai/api/mcp/auth_callback", codeChallenge: "ch", scope: "notebooklm", resource: null, familyId: "fam1", expiresAt: new Date(now.getTime() + 60_000), used: false };
     await s.codes.insert(code);
     const [r1, r2] = await Promise.all([s.codes.consume(code.codeHash), s.codes.consume(code.codeHash)]);
@@ -175,6 +175,85 @@ describe("oauth store", () => {
   it("DCR cap: 200 clients list in pages; the 201st would be refused by the app, storage holds all", async () => {
     const s = createSupabaseStore(db());
     for (let i = 0; i < 205; i++) await s.clients.insert({ clientId: `bulk${i}`, redirectUris: ["https://a.example/cb"], clientName: "n", createdAt: new Date() });
-    expect(await s.clients.count()).toBe(205);
+    expect(await s.clients.countLive(new Date(0))).toBe(205);
+  });
+});
+
+describe("migration 0004 behaviour (real adapters vs emulator)", () => {
+  const H = "h".repeat(64);
+  const mk = (id: string, at: Date, extra: object = {}) => ({ clientId: id, redirectUris: ["https://claude.ai/api/mcp/auth_callback"], clientName: "Claude", createdAt: at, ...extra });
+  const base = { kind: "refresh" as const, clientId: "k1", scope: "notebooklm", revokedAt: null };
+  beforeEach(async () => void (await fetch(EMU + "/__qa/reset", { method: "POST" })));
+
+  it("Db.count / countLive / countRecentByIp / markHasToken use ip_hash, has_token and gte filters", async () => {
+    const s = createSupabaseStore(db());
+    const now = Date.now();
+    await s.clients.insert(mk("k1", new Date(now - 3 * 3600_000), { ipHash: H }));
+    await s.clients.insert(mk("k2", new Date(now - 1000), { ipHash: H }));
+    await s.clients.insert(mk("k3", new Date(now - 5 * 3600_000), { hasToken: true }));
+    expect(await s.clients.countLive(new Date(now - 3600_000))).toBe(2); // k2 (fresh) + k3 (token); k1 abandoned
+    expect(await s.clients.countRecentByIp(H, new Date(now - 3600_000))).toBe(1);
+    expect(await s.clients.countRecentByIp(H, new Date(now - 4 * 3600_000))).toBe(2);
+    await s.clients.markHasToken("k1");
+    await s.clients.markHasToken("k1"); // idempotent
+    expect(await s.clients.countLive(new Date(now - 3600_000))).toBe(3);
+    expect((await s.clients.get("k1"))).toMatchObject({ hasToken: true, ipHash: H });
+  });
+
+  it("rotated flag: rotation is not a revoked family; revokeFamily and tombstone are", async () => {
+    const s = createSupabaseStore(db());
+    const now = new Date();
+    await s.clients.insert(mk("k1", now));
+    const t = (h: string, fam: string) => ({ ...base, tokenHash: h.repeat(64).slice(0, 64), familyId: fam, expiresAt: new Date(now.getTime() + 1e6), createdAt: now });
+    await s.tokens.insert(t("a", "fa"));
+    expect(await s.tokens.claim("a".repeat(64), now, true)).toBe(true);
+    expect(await s.tokens.get("a".repeat(64))).toMatchObject({ rotated: true });
+    expect(await s.tokens.familyRevoked("fa")).toBe(false);
+    await s.tokens.insert(t("b", "fa"));
+    await s.tokens.revokeFamily("fa", now);
+    expect(await s.tokens.familyRevoked("fa")).toBe(true);
+    await s.tokens.tombstoneFamily("fb", "k1", now);
+    expect(await s.tokens.familyRevoked("fb")).toBe(true);
+  });
+
+  it("rpc prune_expired: same predicates as the SQL function; live rows survive; anon key is refused", async () => {
+    const d = db();
+    const s = createSupabaseStore(d);
+    const now = Date.now();
+    const ago = (ms: number) => new Date(now - ms);
+    const D = 86_400_000, H1 = 3_600_000;
+    await s.clients.insert(mk("old-orphan", ago(3 * D)));
+    await s.clients.insert(mk("new-orphan", ago(5 * 60_000)));
+    await s.clients.insert(mk("live", ago(3 * D), { hasToken: true }));
+    const t = (h: string, o: object) => ({ ...base, clientId: "live", tokenHash: h.repeat(64).slice(0, 64), familyId: "f", createdAt: ago(40 * D), expiresAt: new Date(now + 20 * D), ...o });
+    await s.tokens.insert(t("1", { expiresAt: ago(8 * D) })); // expired > 7 d: pruned
+    await s.tokens.insert(t("2", { expiresAt: ago(2 * D) })); // expired recently: kept
+    await s.tokens.insert(t("3", { revokedAt: ago(8 * D) })); // revoked > 7 d: pruned
+    await s.tokens.insert(t("4", { revokedAt: ago(1 * D) })); // revoked recently: kept
+    await s.tokens.insert(t("5", {})); // live
+    for (const [h, exp] of [["c1", ago(2 * H1)], ["c2", ago(30 * 60_000)], ["c3", new Date(now + 50_000)]] as const) {
+      await s.codes.insert({ codeHash: h.repeat(32), clientId: "live", redirectUri: "https://claude.ai/api/mcp/auth_callback", codeChallenge: "x", scope: "notebooklm", resource: null, familyId: "f", expiresAt: exp, used: true });
+    }
+    await d.insert("audit_log", { tool: "x", outcome: "ok", at: ago(120 * D).toISOString() });
+    await d.insert("audit_log", { tool: "x", outcome: "ok", at: ago(1 * D).toISOString() });
+    await d.insert("login_attempts", { key_hash: "a".repeat(64), attempted_at: ago(2 * D).toISOString() });
+    await d.insert("login_attempts", { key_hash: "b".repeat(64), attempted_at: ago(1000).toISOString() });
+
+    expect(await d.rpc!("prune_expired")).toEqual({ codes: 1, tokens: 2, clients: 1, audit: 1, login: 1 });
+    const left = (await tables()) as Record<string, Rows>;
+    expect(left.oauth_clients!.map((c) => c.client_id).sort()).toEqual(["live", "new-orphan"]);
+    expect(left.oauth_tokens!.map((x) => (x.token_hash as string)[0]).sort()).toEqual(["2", "4", "5"]);
+    expect(left.oauth_codes!.map((c) => (c.code_hash as string)[0]).sort()).toEqual(["c", "c"]);
+    expect(left.audit_log!).toHaveLength(1);
+    expect(left.login_attempts!).toHaveLength(1);
+    expect(await d.rpc!("prune_expired")).toEqual({ codes: 0, tokens: 0, clients: 0, audit: 0, login: 0 });
+  });
+
+  it("rpc is service-role only (anon key -> 401, like the REVOKE in the migration) and unknown functions are 404", async () => {
+    const h = { "content-type": "application/json", apikey: KEY, authorization: `Bearer ${KEY}` };
+    expect((await fetch(`${EMU}/rest/v1/rpc/prune_expired`, { method: "POST", headers: h, body: "{}" })).status).toBe(200);
+    const anon = { ...h, apikey: ANON, authorization: `Bearer ${ANON}` };
+    expect((await fetch(`${EMU}/rest/v1/rpc/prune_expired`, { method: "POST", headers: anon, body: "{}" })).status).toBe(401);
+    expect((await fetch(`${EMU}/rest/v1/rpc/nope`, { method: "POST", headers: h, body: "{}" })).status).toBe(404);
   });
 });

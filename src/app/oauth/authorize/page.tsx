@@ -59,9 +59,15 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
         <p>
           <strong>App:</strong> {view.clientName}
         </p>
-        <p>
-          <strong>Returns to:</strong> <code>{view.redirectHost}</code>
+        <p className="return-host">
+          <strong>Sends you back to:</strong> <code style={{ fontSize: "1.15em", fontWeight: 700 }}>{view.redirectHost}</code>
         </p>
+        {view.trustedHost ? null : (
+          <p role="alert" className="msg">
+            Warning: this app is not Claude. After you approve, it will receive access to your notebooks and sends you to {view.redirectHost}. The app name is chosen by
+            the app itself and can be wrong. Only approve if you started this connection yourself and recognise that address; otherwise press Deny.
+          </p>
+        )}
         <p>
           <strong>It will be able to:</strong> {view.scopeText}
         </p>

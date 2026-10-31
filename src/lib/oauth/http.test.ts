@@ -129,6 +129,31 @@ describe("endpoints", () => {
     expect(res.headers.get("www-authenticate")).toMatch(/^Basic /);
     expect(((await res.json()) as { error: string }).error).toBe("invalid_client");
   });
+  it("register: spoofed https redirect host is rejected; extra hosts come from OAUTH_EXTRA_REDIRECT_HOSTS", async () => {
+    const reg = (d: OAuthHttpDeps, uri: string) =>
+      handleRegister(new Request(`${ORIGIN}/oauth/register`, { method: "POST", body: JSON.stringify({ client_name: "Claude", redirect_uris: [uri] }) }), d);
+    const d = mk();
+    const bad = await reg(d, "https://evil.example/cb");
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { error: string }).error).toBe("invalid_redirect_uri");
+    expect((await reg(d, "http://localhost:6274/oauth/callback")).status).toBe(201);
+    expect((await reg({ ...d, env: { ...env, OAUTH_EXTRA_REDIRECT_HOSTS: "Mine.example, other.example" } }, "https://mine.example/cb")).status).toBe(201);
+  });
+  it("register: 11th registration from one IP in an hour -> 429 + Retry-After; the stored hash is not the IP; no IP header -> no per-IP limit", async () => {
+    const d = mk();
+    const store = d.oauth().store;
+    const reg = (ip?: string) =>
+      handleRegister(new Request(`${ORIGIN}/oauth/register`, { method: "POST", headers: ip ? { "x-forwarded-for": `${ip}, 10.0.0.1` } : {}, body: JSON.stringify({ client_name: "Claude", redirect_uris: [REDIRECT] }) }), d);
+    for (let i = 0; i < 10; i++) expect((await reg("203.0.113.9")).status).toBe(201);
+    const limited = await reg("203.0.113.9");
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBe("3600");
+    expect((await reg("203.0.113.10")).status).toBe(201);
+    for (let i = 0; i < 12; i++) expect((await reg()).status).toBe(201);
+    const hashes = (await store.clients.list()).map((c) => c.ipHash);
+    expect(hashes.filter(Boolean).every((h) => /^[0-9a-f]{64}$/.test(h!))).toBe(true);
+    expect(JSON.stringify(hashes)).not.toContain("203.0.113");
+  });
   it("metadata uses PUBLIC_BASE_URL", async () => {
     const res = handleMetadata("resource", new Request(`${ORIGIN}/.well-known/oauth-protected-resource`), { PUBLIC_BASE_URL: "https://nlm.example.com" });
     expect(await res.json()).toMatchObject({ resource: "https://nlm.example.com/api/mcp" });

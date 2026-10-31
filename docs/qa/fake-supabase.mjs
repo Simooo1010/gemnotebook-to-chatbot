@@ -5,14 +5,16 @@
 //   POST   insert (+ Prefer return=representation|minimal) and upsert (on_conflict + resolution=merge-duplicates|ignore-duplicates)
 //   PATCH  update with filters (representation or 204)
 //   DELETE with filters
+//   POST /rest/v1/rpc/prune_expired (service role only; mirrors public.prune_expired() of migration 0004)
 //   Accept: application/vnd.pgrst.object+json  (single-object mode, 406 PGRST116 on 0 / many rows)
-// Tables mirror supabase/migrations/0001..0003 (types, defaults, NOT NULL, CHECK, PK, FK with cascade / set null, identity).
+// Tables mirror supabase/migrations/0001..0004 (types, defaults, NOT NULL, CHECK, PK, FK with cascade / set null, identity).
 // Errors use the PostgREST JSON shape {code,message,details,hint} with PostgREST/Postgres status codes
 // (409 / 23505 unique, 409 / 23503 FK, 400 / 23502 not null, 400 / 23514 check, 400 / 22P02 bad uuid/bool/int, 406 / PGRST116 ...).
 // Like Supabase: apikey header required, pg-safeupdate (PATCH/DELETE without a filter -> 400 21000), max-rows 1000.
 //
 // Usage:  FAKE_SB_PORT=3410 FAKE_SB_KEY=<service key> [FAKE_SB_ANON_KEY=<anon key>] node docs/qa/fake-supabase.mjs
 // QA endpoints (not part of PostgREST; under /__qa/):  GET /__qa/tables, GET /__qa/log, POST /__qa/reset,
+//   POST /__qa/age {table, ms} (shift timestamps back), POST /__qa/prune {now?} (run prune_expired as of a time),
 //   POST /__qa/fault {table?,method?,status,times}  -> next matching requests fail with that HTTP status (storage outage test).
 import http from "node:http";
 import crypto from "node:crypto";
@@ -78,6 +80,8 @@ const SCHEMA = {
       redirect_uris: col("text[]", { nn: true, check: (r) => r.redirect_uris.length >= 1 && r.redirect_uris.length <= 5, checkName: "oauth_clients_redirect_uris_check" }),
       client_name: col("text", { nn: true, check: (r) => r.client_name.length >= 1 && r.client_name.length <= 100, checkName: "oauth_clients_client_name_check" }),
       created_at: col("timestamptz", { nn: true, def: "now" }),
+      ip_hash: col("text", { check: (r) => r.ip_hash === null || r.ip_hash.length === 64, checkName: "oauth_clients_ip_hash_check" }),
+      has_token: col("boolean", { nn: true, def: false }),
     },
     pk: ["client_id"],
   },
@@ -106,6 +110,7 @@ const SCHEMA = {
       family_id: col("text", { nn: true }),
       revoked: col("boolean", { nn: true, def: false }),
       revoked_at: col("timestamptz"),
+      rotated: col("boolean", { nn: true, def: false }),
       created_at: col("timestamptz", { nn: true, def: "now" }),
     },
     pk: ["token_hash"],
@@ -378,7 +383,36 @@ function send(res, status, body, headers = {}) {
   res.end(payload);
 }
 
+// Mirrors public.prune_expired() (migration 0004): same predicates, one snapshot for the data-modifying CTEs.
+function pruneExpired(now = Date.now()) {
+  const H = 3600_000, D = 24 * H;
+  const ts = (v) => Date.parse(v);
+  const del = (table, pred) => {
+    const doomed = db[table].filter(pred);
+    return doomed;
+  };
+  const codes = del("oauth_codes", (r) => ts(r.expires_at) < now - H);
+  const tokens = del("oauth_tokens", (r) => ts(r.expires_at) < now - 7 * D || (r.revoked && ts(r.revoked_at ?? r.created_at) < now - 7 * D));
+  const clients = del("oauth_clients", (k) => ts(k.created_at) < now - H && !db.oauth_tokens.some((t) => t.client_id === k.client_id));
+  const audit = del("audit_log", (r) => ts(r.at) < now - 90 * D);
+  const login = del("login_attempts", (r) => ts(r.attempted_at) < now - 24 * H);
+  for (const [t, rows] of [["oauth_codes", codes], ["oauth_tokens", tokens], ["oauth_clients", clients], ["audit_log", audit], ["login_attempts", login]]) {
+    for (const r of rows) if (db[t].includes(r)) deleteRow(t, r);
+  }
+  return { codes: codes.length, tokens: tokens.length, clients: clients.length, audit: audit.length, login: login.length };
+}
+
+function handleRpc(req, res, url, bodyText) {
+  const fn = decodeURIComponent(url.pathname.slice("/rest/v1/rpc/".length));
+  if (fn !== "prune_expired") throw new PgError(404, "PGRST202", `Could not find the function public.${fn} in the schema cache`);
+  if (req.method !== "POST") throw new PgError(405, "PGRST117", `Unsupported HTTP method: ${req.method} (rpc)`);
+  if (ANON_KEY && req.__key === ANON_KEY) throw new PgError(401, "42501", `permission denied for function ${fn}`); // execute granted to service_role only
+  if (bodyText.trim() !== "" && bodyText.trim() !== "{}") throw new PgError(404, "PGRST202", `Could not find the function public.${fn}(args) in the schema cache`);
+  return send(res, 200, pruneExpired());
+}
+
 function handleRest(req, res, url, bodyText) {
+  if (url.pathname.startsWith("/rest/v1/rpc/")) return handleRpc(req, res, url, bodyText);
   const table = decodeURIComponent(url.pathname.slice("/rest/v1/".length));
   const spec = SCHEMA[table];
   const method = req.method;
@@ -509,6 +543,14 @@ const server = http.createServer((req, res) => {
     if (url.pathname.startsWith("/__qa/")) {
       if (url.pathname === "/__qa/tables") return send(res, 200, db);
       if (url.pathname === "/__qa/log") return send(res, 200, requestLog);
+      if (url.pathname === "/__qa/age" && req.method === "POST") { // test hook: make rows older (shifts every timestamp column of a table back by `ms`)
+        const { table, ms } = JSON.parse(bodyText || "{}");
+        const spec = SCHEMA[table];
+        if (!spec) return send(res, 404, { message: "no such table" });
+        for (const r of db[table]) for (const [k, c] of Object.entries(spec.cols)) if (c.t === "timestamptz" && r[k] !== null) r[k] = fmtTs(parseTs(r[k]) - ms);
+        return send(res, 200, { ok: true, rows: db[table].length });
+      }
+      if (url.pathname === "/__qa/prune" && req.method === "POST") return send(res, 200, pruneExpired(JSON.parse(bodyText || "{}").now ?? Date.now())); // test hook: prune as of a given time
       if (url.pathname === "/__qa/reset" && req.method === "POST") { reset(); return send(res, 200, { ok: true }); }
       if (url.pathname === "/__qa/fault" && req.method === "POST") { faults.push({ ...JSON.parse(bodyText || "{}") }); return send(res, 200, { ok: true, faults: faults.length }); }
       return send(res, 404, { message: "no such QA endpoint" });
