@@ -1,4 +1,4 @@
-import { cookieHeaderFor, mergeSetCookie, type CookieJar } from "@/lib/vault/jar";
+import { cookieHeaderFor, mediaCookieHeaderFor, mergeSetCookie, type CookieJar } from "@/lib/vault/jar";
 import { DisallowedHostError, ExpiredAuthError, RangeNotSatisfiableError, TooManyRedirectsError } from "./errors";
 
 /** Minimal fetch-compatible surface. Callers MUST pass redirect: "manual". Real `fetch` satisfies it. */
@@ -71,6 +71,8 @@ export interface FetchWithJarOptions {
   /** Host suffixes allowed (exact or subdomain). Default: google.com, googleusercontent.com, googleapis.com. */
   allowedHosts?: readonly string[];
   now?: () => number;
+  /** Cookie header builder, evaluated per hop. Default: the plain jar match (`cookieHeaderFor`). */
+  cookieHeader?: (jar: CookieJar, url: string, nowMs: number) => string;
 }
 
 export interface FetchWithJarResult {
@@ -103,6 +105,7 @@ export async function fetchWithJar(
   const maxHops = opts.maxHops ?? 6;
   const allowed = opts.allowedHosts ?? DEFAULT_ALLOWED_HOST_SUFFIXES;
   const now = opts.now ?? Date.now;
+  const cookieHeader = opts.cookieHeader ?? cookieHeaderFor;
   let current = { cookies: [...jar.cookies] };
   let hopUrl = url;
   let method = init.method ?? "GET";
@@ -110,7 +113,7 @@ export async function fetchWithJar(
   for (let hop = 0; ; hop++) {
     assertAllowed(hopUrl, allowed);
     const headers: Record<string, string> = { ...(init.headers ?? {}) };
-    const cookie = cookieHeaderFor(current, hopUrl, now());
+    const cookie = cookieHeader(current, hopUrl, now());
     if (cookie) headers.Cookie = cookie;
     if (body === undefined) delete headers["Content-Type"];
     const response = await fetch(hopUrl, { method, headers, body, redirect: "manual", signal: init.signal });
@@ -139,12 +142,19 @@ export interface MediaResult {
   jar: CookieJar;
 }
 
-/** Streams media. HTML or 0-byte bodies (or non-2xx) are treated as expired auth (SPEC §3 Downloads). */
+export const DEFAULT_MEDIA_REFERER_BASE = "https://notebook.google.com";
+
+/**
+ * Streams media. Request shape follows the reference CLI's live debugging (notebooklm-mcp-cli `core/download.py`):
+ * the audio CDN answers 403 to `Sec-Fetch-Site: none` (an address-bar navigation); the NotebookLM UI request is
+ * `cross-site` with `Referer: {base}/`. Cookies for `*.googleusercontent.com` hosts come from the media-only view
+ * `mediaCookieHeaderFor` (see jar.ts); every redirect hop re-evaluates host allow-list and cookies.
+ * HTML or 0-byte bodies (or non-2xx) are treated as expired auth (SPEC §3 Downloads). */
 export async function fetchMedia(
   fetch: FetchLike,
   jar: CookieJar,
   url: string,
-  opts: FetchWithJarOptions & { signal?: AbortSignal; range?: string } = {},
+  opts: FetchWithJarOptions & { signal?: AbortSignal; range?: string; base?: string } = {},
 ): Promise<MediaResult> {
   const { response, finalUrl, jar: out } = await fetchWithJar(
     fetch,
@@ -152,10 +162,16 @@ export async function fetchMedia(
     url,
     {
       method: "GET",
-      headers: { ...browserHeaders("document"), Accept: "*/*", ...(opts.range ? { Range: opts.range } : {}) },
+      headers: {
+        ...browserHeaders("document"),
+        Accept: "*/*",
+        "Sec-Fetch-Site": "cross-site",
+        Referer: `${(opts.base ?? DEFAULT_MEDIA_REFERER_BASE).replace(/\/+$/, "")}/`,
+        ...(opts.range ? { Range: opts.range } : {}),
+      },
       signal: opts.signal,
     },
-    opts,
+    { ...opts, cookieHeader: mediaCookieHeaderFor },
   );
   const host = hostOf(finalUrl);
   if (response.status === 416) {

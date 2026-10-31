@@ -132,7 +132,7 @@ export function createRuntime(p: RuntimeParts): CronRuntime {
   const sources = createSourceOps({ client, created: p.created, notebooks, rpcOverridesJson, now: p.now });
   const studio = createStudioOps({ client, created: p.created, notebooks, rpcOverridesJson, now: p.now });
   const chat = createChatOps({ client, notebooks, rpcOverridesJson });
-  const media = createMediaDownloader({ studio, vault: p.vault, throttle, fetch: fetchImpl, audit: p.audit, now: p.now, urlMemo: createUrlMemo({ now: p.now }) });
+  const media = createMediaDownloader({ studio, vault: p.vault, throttle, fetch: fetchImpl, audit: p.audit, now: p.now, base: resolveNotebookBaseUrl(p.env), urlMemo: createUrlMemo({ now: p.now }) });
   const links: MediaLinks = {
     create(a) {
       const base = resolvePublicBaseUrl(p.env);

@@ -148,23 +148,65 @@ function pathMatches(reqPath: string, cookiePath: string): boolean {
 
 const nowSec = (nowMs: number) => Math.floor(nowMs / 1000);
 
-/** Cookie header value for `url`, or "" when nothing matches. Longer paths first (RFC 6265 §5.4). */
-export function cookieHeaderFor(jar: CookieJar, url: string, nowMs: number = Date.now()): string {
+function matchingCookies(jar: CookieJar, url: string, nowMs: number): Cookie[] {
   const u = new URL(url);
   const host = u.hostname.toLowerCase();
   const secure = u.protocol === "https:";
   const t = nowSec(nowMs);
-  return jar.cookies
-    .filter(
-      (c) =>
-        domainMatches(host, c.domain) &&
-        pathMatches(u.pathname || "/", c.path) &&
-        (!c.secure || secure) &&
-        (c.expires === undefined || c.expires > t),
-    )
+  return jar.cookies.filter(
+    (c) =>
+      domainMatches(host, c.domain) &&
+      pathMatches(u.pathname || "/", c.path) &&
+      (!c.secure || secure) &&
+      (c.expires === undefined || c.expires > t),
+  );
+}
+
+const toHeader = (cookies: Cookie[]) =>
+  [...cookies]
     .sort((a, b) => b.path.length - a.path.length)
     .map((c) => `${c.name}=${c.value}`)
     .join("; ");
+
+/** Cookie header value for `url`, or "" when nothing matches. Longer paths first (RFC 6265 §5.4). */
+export function cookieHeaderFor(jar: CookieJar, url: string, nowMs: number = Date.now()): string {
+  return toHeader(matchingCookies(jar, url, nowMs));
+}
+
+/** Cookies that must never be re-scoped onto download hosts (reference CLI deletes them before downloads). */
+const MEDIA_EXCLUDED_NAMES = new Set(["OSID", "__Secure-OSID"]);
+
+const isGoogleusercontentHost = (host: string) => host === "googleusercontent.com" || host.endsWith(".googleusercontent.com");
+
+/**
+ * MEDIA-ONLY cookie header (never stored, never used for RPC/page requests).
+ *
+ * Real exports carry session cookies on `.google.com` only; nothing is scoped to `.googleusercontent.com`, so the
+ * normal domain match would send `lh3.googleusercontent.com` no cookies at all. The reference CLI
+ * (jacob-bd/notebooklm-mcp-cli `core/base.py` ~L593-623, `core/download.py`) duplicates the `.google.com` auth
+ * cookies onto `.googleusercontent.com` "required for artifact downloads that redirect to googleusercontent.com",
+ * and deletes `OSID` / `__Secure-OSID` first ("when it leaks onto download hosts Google redirects to ServiceLogin").
+ * We do the same as a per-request VIEW: for `*.googleusercontent.com` only, the jar's domain-wide `.google.com`
+ * cookies (not host-only ones, not OSID/__Secure-OSID) are added to whatever genuinely matches the host. The view
+ * is a string built per hop and thrown away: the jar and the vault are never touched, and every other host gets
+ * exactly `cookieHeaderFor`.
+ */
+export function mediaCookieHeaderFor(jar: CookieJar, url: string, nowMs: number = Date.now()): string {
+  const u = new URL(url);
+  const host = u.hostname.toLowerCase();
+  if (!isGoogleusercontentHost(host) || u.protocol !== "https:") return cookieHeaderFor(jar, url, nowMs);
+  const t = nowSec(nowMs);
+  const genuine = matchingCookies(jar, url, nowMs);
+  const rescoped = jar.cookies.filter(
+    (c) =>
+      c.domain === ".google.com" && // domain-wide only: host-only cookies are never re-scoped
+      !MEDIA_EXCLUDED_NAMES.has(c.name) &&
+      pathMatches(u.pathname || "/", c.path) &&
+      (c.expires === undefined || c.expires > t),
+  );
+  // Genuine host cookies come first and win on a name clash.
+  const seen = new Set<string>();
+  return toHeader([...genuine, ...rescoped].filter((c) => (seen.has(c.name) ? false : (seen.add(c.name), true))));
 }
 
 function defaultPath(u: URL): string {
