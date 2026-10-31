@@ -115,6 +115,20 @@ describe("endpoints", () => {
     expect(h("https://claude.com")).toBe("https://claude.com");
     expect(h("https://evil.example")).toBeUndefined();
   });
+  it("CORS lists the MCP headers and DELETE", () => {
+    const h = corsHeaders(new Request(ORIGIN, { headers: { origin: "https://claude.ai" } }));
+    for (const x of ["Mcp-Session-Id", "Accept", "Last-Event-ID", "Authorization", "Content-Type", "MCP-Protocol-Version"]) expect(h["Access-Control-Allow-Headers"]).toContain(x);
+    expect(h["Access-Control-Allow-Methods"]).toContain("DELETE");
+  });
+  it("token: invalid_client is 401 with a WWW-Authenticate challenge", async () => {
+    const res = await handleToken(
+      new Request(`${ORIGIN}/oauth/token`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "grant_type=refresh_token&client_id=nlm_c_nope" }),
+      mk(),
+    );
+    expect(res.status).toBe(401);
+    expect(res.headers.get("www-authenticate")).toMatch(/^Basic /);
+    expect(((await res.json()) as { error: string }).error).toBe("invalid_client");
+  });
   it("metadata uses PUBLIC_BASE_URL", async () => {
     const res = handleMetadata("resource", new Request(`${ORIGIN}/.well-known/oauth-protected-resource`), { PUBLIC_BASE_URL: "https://nlm.example.com" });
     expect(await res.json()).toMatchObject({ resource: "https://nlm.example.com/api/mcp" });

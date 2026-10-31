@@ -24,14 +24,39 @@ export interface McpRouteDeps {
 
 const NO_STORE = { "Cache-Control": "no-store", Pragma: "no-cache" };
 
+/** RFC 6750 §3.1: when the request carried no credentials the challenge must not carry an error code. */
+export function stripChallengeError(challenge: string): string {
+  const m = /^(\S+)\s+(.*)$/s.exec(challenge);
+  if (!m) return challenge;
+  const params = (m[2] ?? "").match(/[A-Za-z_][\w-]*="[^"]*"/g) ?? [];
+  const kept = params.filter((p) => !/^error(_description|_uri)?=/.test(p));
+  return kept.length ? `${m[1]} ${kept.join(", ")}` : (m[1] ?? challenge);
+}
+
 function withHeaders(request: Request, res: Response): Response {
   const headers = new Headers(res.headers);
-  for (const [k, v] of Object.entries({ ...NO_STORE, ...corsHeaders(request), "Access-Control-Expose-Headers": "WWW-Authenticate" })) headers.set(k, v);
+  for (const [k, v] of Object.entries({ ...NO_STORE, ...corsHeaders(request), "Access-Control-Expose-Headers": "WWW-Authenticate, Mcp-Session-Id" })) headers.set(k, v);
+  const challenge = headers.get("www-authenticate");
+  if (res.status === 401 && challenge && !request.headers.get("authorization")) headers.set("WWW-Authenticate", stripChallengeError(challenge));
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
+/**
+ * The server is stateless (no sessions, GET answers 405), so nothing can ever send `notifications/tools/list_changed`.
+ * The SDK advertises `tools.listChanged: true` unconditionally when a tool is registered and offers no option for it
+ * (mcp-handler only forwards `capabilities` that the SDK then merges), so the flag is cleared on the underlying server's
+ * capability object. Defensive: a changed SDK shape leaves the default in place (route.test.ts pins the result).
+ */
+export function disableListChanged(server: unknown): void {
+  const caps = (server as { server?: { _capabilities?: { tools?: { listChanged?: boolean } } } }).server?._capabilities;
+  if (caps?.tools) caps.tools.listChanged = false;
+}
+
 export function createMcpRoute(d: McpRouteDeps) {
-  const inner = createMcpHandler((server) => registerTools(server, d.runtime), {
+  const inner = createMcpHandler((server) => {
+    registerTools(server, d.runtime);
+    disableListChanged(server);
+  }, {
     serverInfo: { name: "notebooklm-connector", version: d.serverVersion ?? "0.1.0" },
   });
 

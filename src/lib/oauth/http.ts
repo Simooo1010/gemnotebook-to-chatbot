@@ -26,8 +26,8 @@ export function corsHeaders(request: Request): Record<string, string> {
   if (!origin || !(CORS_ORIGINS as readonly string[]).includes(origin)) return { Vary: "Origin" };
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, MCP-Protocol-Version",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, MCP-Protocol-Version, Mcp-Session-Id, Accept, Last-Event-ID",
     "Access-Control-Max-Age": "600",
     Vary: "Origin",
   };
@@ -41,7 +41,12 @@ function json(request: Request | null, status: number, body: unknown, extra: Rec
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store", Pragma: "no-cache", ...(request ? corsHeaders(request) : {}), ...extra },
   });
 }
-const oauthErr = (request: Request, e: OAuthError) => json(request, e.status, { error: e.error, error_description: e.description });
+/** RFC 6749 §5.2: a 401 invalid_client carries a challenge (public clients send no credentials, so the scheme is only advisory). */
+function oauthErr(request: Request, e: OAuthError): Response {
+  const extra: Record<string, string> = {};
+  if (e.status === 401 && e.error === "invalid_client") extra["WWW-Authenticate"] = 'Basic realm="oauth", charset="UTF-8"';
+  return json(request, e.status, { error: e.error, error_description: e.description }, extra);
+}
 const unavailable = (request: Request) => json(request, 503, { error: "temporarily_unavailable", error_description: "Storage unavailable." });
 
 function deps(d: OAuthHttpDeps): OAuthDeps | null {

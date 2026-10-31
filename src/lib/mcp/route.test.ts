@@ -10,7 +10,7 @@ import type { SourceOps } from "@/lib/notebooklm/sources";
 import type { MediaDownloader } from "@/lib/notebooklm/media-download";
 import type { StudioOps } from "@/lib/notebooklm/studio";
 import type { MediaLinks, ToolRuntime } from "@/lib/runtime";
-import { PROTECTED_RESOURCE_PATH, createMcpRoute } from "./route";
+import { PROTECTED_RESOURCE_PATH, createMcpRoute, stripChallengeError } from "./route";
 
 const BASE = "https://connector.example.com";
 const URL_MCP = `${BASE}/api/mcp`;
@@ -94,6 +94,37 @@ describe("/api/mcp bearer auth", () => {
     expect(res.headers.get("www-authenticate")).toContain(EXPECT_CHALLENGE);
   });
 
+  it("RFC 6750 §3.1: no Authorization header -> challenge without error/error_description; a bad token keeps error=invalid_token", async () => {
+    const { route } = await setup();
+    const none = (await route.handle(post(INIT))).headers.get("www-authenticate")!;
+    expect(none).not.toMatch(/error/);
+    expect(none).toContain(EXPECT_CHALLENGE);
+    expect(none).toMatch(/^Bearer /);
+    const bad = (await route.handle(post(INIT, "nlm_at_" + "Z".repeat(43)))).headers.get("www-authenticate")!;
+    expect(bad).toContain('error="invalid_token"');
+    expect(bad).toContain(EXPECT_CHALLENGE);
+    const garbage = (await route.handle(post(INIT, "not-a-token"))).headers.get("www-authenticate")!;
+    expect(garbage).toContain('error="invalid_token"');
+  });
+
+  it("stripChallengeError only removes error params", () => {
+    expect(stripChallengeError('Bearer error="invalid_token", error_description="No authorization provided", resource_metadata="https://x/y"')).toBe('Bearer resource_metadata="https://x/y"');
+    expect(stripChallengeError('Bearer error="invalid_token"')).toBe("Bearer");
+    expect(stripChallengeError('Bearer realm="a", scope="b c"')).toBe('Bearer realm="a", scope="b c"');
+  });
+
+  it("CORS: preflight and responses allow/expose the MCP session headers", async () => {
+    const { route } = await setup();
+    const pre = await route.options(new Request(URL_MCP, { method: "OPTIONS", headers: { origin: "https://claude.ai", "access-control-request-method": "DELETE" } }));
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get("access-control-allow-methods")).toContain("DELETE");
+    expect(pre.headers.get("access-control-allow-headers")).toMatch(/Mcp-Session-Id.*Accept.*Last-Event-ID/);
+    const res = await route.handle(post(INIT, GOOD, { origin: "https://claude.ai" }));
+    expect(res.headers.get("access-control-expose-headers")).toBe("WWW-Authenticate, Mcp-Session-Id");
+    const denied = await route.handle(post(INIT, undefined, { origin: "https://claude.ai" }));
+    expect(denied.headers.get("access-control-expose-headers")).toContain("WWW-Authenticate");
+  });
+
   it("a token without the notebooklm scope -> 403", async () => {
     const { route } = await setup();
     const res = await route.handle(post(INIT, WRONG_SCOPE));
@@ -139,6 +170,8 @@ describe("/api/mcp with a valid token", () => {
     const msg = await rpcResult(res);
     expect(msg.error).toBeUndefined();
     expect(msg.result).toMatchObject({ serverInfo: { name: "notebooklm-connector" }, capabilities: { tools: expect.anything() } });
+    // Stateless server: nothing can ever be notified, so it must not advertise tools.listChanged (see disableListChanged).
+    expect((msg.result as { capabilities: { tools: { listChanged?: boolean } } }).capabilities.tools.listChanged).toBe(false);
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
