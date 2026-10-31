@@ -49,7 +49,7 @@ export interface GoogleClientConfig {
   tokenTtlMs?: number;
   /** Chat turn timeout (whole response). Default 120 s. */
   chatTimeoutMs?: number;
-  /** Chat response size cap in bytes. Default 2 MB. */
+  /** Chat response size cap in bytes. Default 8 MiB (DEFAULT_CHAT_MAX_BYTES). */
   chatMaxBytes?: number;
 }
 
@@ -94,7 +94,12 @@ export interface ChatStreamResult {
 }
 
 export const DEFAULT_CHAT_TIMEOUT_MS = 120_000;
-export const DEFAULT_CHAT_MAX_BYTES = 2 * 1024 * 1024;
+/**
+ * Real chat streams are cumulative (every chunk repeats the whole answer and its citations): 370-710 KB for a
+ * ~2000-char answer with 7-9 citations (notebooklm-py cassettes chat_ask*.yaml), growing with answer length x
+ * citation count. 8 MiB leaves headroom for long answers with many citations; it stays a configurable cap.
+ */
+export const DEFAULT_CHAT_MAX_BYTES = 8 * 1024 * 1024;
 
 async function readCapped(response: { body: ReadableStream<Uint8Array> | null; text(): Promise<string> }, max: number): Promise<string> {
   if (!response.body) {

@@ -1,10 +1,12 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { RpcNoFramesError, RpcQuotaError } from "@/lib/rpc/errors";
 import { parseChatResponse } from "@/lib/rpc/chat";
 import { loadKeyring } from "@/lib/vault/crypto";
 import { MemoryAccountRepo, MemorySessionVault } from "@/lib/vault/memory";
 import { createVault } from "@/lib/vault/vault";
-import { createGoogleClient, type AuditRow, type GoogleClientConfig } from "./client";
+import { DEFAULT_CHAT_MAX_BYTES, createGoogleClient, type AuditRow, type GoogleClientConfig } from "./client";
 import {
   AccountNeedsReauthError,
   AmbiguousMutationError,
@@ -152,6 +154,21 @@ describe("chatStream transport", () => {
     const s = await setup([rotateOk, home, () => res(200, { body: chatBody("x".repeat(5000)) })], { chatMaxBytes: 1000 });
     await expect(s.client.chatStream(turn(s.id))).rejects.toBeInstanceOf(ChatResponseTooLargeError);
     expect(s.audit[0]!.outcome).toBe("error:chat_too_large");
+  });
+
+  it("T3-9: a real-shaped ~700 KB cumulative chat stream (real answers: 370-710 KB) is accepted under the default cap", async () => {
+    const real = (JSON.parse(readFileSync(path.join(__dirname, "../rpc/__fixtures__/chat-stream-final.json"), "utf8")) as { body: string }).body;
+    const frames = real.split("\n").filter((l) => l.startsWith("[[\"wrb.fr\""));
+    const body = `)]}'\n\n` + Array.from({ length: 24 }, () => frames.join("\n")).join("\n") + "\n";
+    expect(Buffer.byteLength(body)).toBeGreaterThan(650_000);
+    expect(Buffer.byteLength(body)).toBeLessThan(800_000);
+    expect(DEFAULT_CHAT_MAX_BYTES).toBe(8 * 1024 * 1024);
+    const s = await setup([rotateOk, home, () => res(200, { body })]);
+    const out = await s.client.chatStream(turn(s.id));
+    expect(parseChatResponse(out.text).citations).toHaveLength(7);
+    // the cap is still enforced when configured lower
+    const t = await setup([rotateOk, home, () => res(200, { body })], { chatMaxBytes: 500_000 });
+    await expect(t.client.chatStream(turn(t.id))).rejects.toBeInstanceOf(ChatResponseTooLargeError);
   });
 
   it("timeout → ambiguous (timeout), no retry", async () => {
