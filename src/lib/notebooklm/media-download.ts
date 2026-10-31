@@ -14,7 +14,7 @@ import { fetchMedia, type FetchLike } from "@/lib/google/http";
 import type { Throttle } from "@/lib/google/throttle";
 import { MEDIA_CONTENT_TYPE, MEDIA_FILENAME, verifyMediaToken, type MediaClaims, type MediaKind } from "./media-link";
 import { ArtifactNotDownloadableError, ArtifactNotFoundError, ArtifactNotReadyError, type StudioOps } from "./studio";
-import { VaultError } from "@/lib/vault/vault";
+import { isVaultError } from "@/lib/vault/vault";
 
 export interface OpenedMedia {
   /** 200 (whole file) or 206 (partial). */
@@ -93,7 +93,7 @@ const sameJar = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify
 
 function outcomeOf(e: unknown): string {
   if (e && typeof e === "object" && "kind" in e && typeof (e as { kind: unknown }).kind === "string") return `error:${(e as { kind: string }).kind}`;
-  if (e instanceof VaultError) return `error:vault_${e.code}`;
+  if (isVaultError(e)) return `error:vault_${e.code}`;
   return "error:internal";
 }
 
@@ -169,7 +169,7 @@ export async function handleMediaRequest(request: Request, token: string, d: Med
   try {
     m = await downloader.open(claims, { range: sanitizeRange(request.headers.get("range")), signal: request.signal, memoKey: memoKeyForToken(token) });
   } catch (e) {
-    if (e instanceof VaultError) return notFound(); // disabled, wiped or unknown account
+    if (isVaultError(e)) return notFound(); // disabled, wiped or unknown account
     if (e instanceof ArtifactNotFoundError || e instanceof ArtifactNotReadyError || e instanceof ArtifactNotDownloadableError) return notFound();
     if (e instanceof RangeNotSatisfiableError) {
       return generic(416, "Requested range not satisfiable", e.contentRange ? { "Content-Range": e.contentRange } : {});

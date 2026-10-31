@@ -36,9 +36,9 @@ import { RpcAuthError, RpcDriftError, RpcNoFramesError, RpcQuotaError, RpcStatus
 import { RuntimeConfigError } from "@/lib/runtime";
 import { KeyringConfigError, VaultCryptoError } from "@/lib/vault/crypto";
 import { VaultConfigError } from "@/lib/vault";
-import { JarError } from "@/lib/vault/jar";
+import { isJarError } from "@/lib/vault/jar";
 import { VaultStorageError } from "@/lib/vault/supabase";
-import { VaultError } from "@/lib/vault/vault";
+import { isVaultError } from "@/lib/vault/vault";
 import { AccountResolutionError } from "./accounts";
 
 export interface ToolResult {
@@ -174,12 +174,12 @@ export function toolError(e: unknown): ToolResult {
   if (e instanceof RpcStatusError) {
     return fail(`NotebookLM refused the request (${e.statusName}). Check the notebook id and that the account can access it; do not retry blindly.`);
   }
-  if (e instanceof VaultError) {
+  if (isVaultError(e)) {
     if (e.code === "no_session") return fail(`This account has no stored Google session. ${REIMPORT}`);
     if (e.code === "not_active") return fail(`This account is disabled or needs re-authentication. ${REIMPORT}`);
     return fail("That account does not exist. Call accounts_list to see the available accounts.");
   }
-  if (e instanceof JarError || e instanceof VaultCryptoError) {
+  if (isJarError(e) || e instanceof VaultCryptoError) {
     return fail(`The stored Google session for this account is incomplete or cannot be read. ${REIMPORT}`);
   }
   if (e instanceof ExpiredAuthError) {

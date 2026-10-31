@@ -210,6 +210,38 @@ describe("import", () => {
     expect(await accounts.list()).toHaveLength(0);
   });
 
+  it("missing cookies from a FOREIGN JarError copy (other module graph): still 400 with names only", async () => {
+    // Structurally equal to JarError but not an instance of the imported class.
+    class JarError extends Error {
+      constructor(readonly code: string, readonly missing: string[]) {
+        super(`missing required cookies: ${missing.join(", ")}`);
+        this.name = "JarError";
+      }
+    }
+    const foreign = new JarError("missing_required", ["SID", "__Secure-1PSIDTS"]);
+    const { deps, vault } = setup();
+    const fake = { ...vault, connectAccount: async () => { throw foreign; } } as typeof vault;
+    const res = await handleImport(authed("/api/vault/accounts", importBody("X")), { ...deps, getVault: () => fake });
+    expect(res.status).toBe(400);
+    const body = await text(res);
+    const j = JSON.parse(body);
+    expect(j.error.code).toBe("missing_required");
+    expect(j.error.missing).toEqual(["SID", "__Secure-1PSIDTS"]);
+    expect(body).not.toContain("SECRET-");
+  });
+
+  it("a foreign VaultError copy maps like the real one; a look-alike without a code stays a generic 500", async () => {
+    const { deps, vault } = setup();
+    const foreignVault = Object.assign(new Error("vault: not_active"), { name: "VaultError", code: "not_active" });
+    const fake = { ...vault, connectAccount: async () => { throw foreignVault; } } as typeof vault;
+    const r1 = await handleImport(authed("/api/vault/accounts", importBody("X")), { ...deps, getVault: () => fake });
+    expect(r1.status).toBe(409);
+    const noCode = Object.assign(new Error("x"), { name: "JarError" });
+    const fake2 = { ...vault, connectAccount: async () => { throw noCode; } } as typeof vault;
+    const r2 = await handleImport(authed("/api/vault/accounts", importBody("X")), { ...deps, getVault: () => fake2 });
+    expect(r2.status).toBe(500);
+  });
+
   it("invalid JSON text / wrong shape: generic error that does not echo the input", async () => {
     const { deps } = setup();
     for (const json of ["{oops SECRET-PASTE", "\"just a string SECRET-PASTE\"", "", "   "]) {

@@ -12,6 +12,12 @@ export class VaultError extends Error {
   }
 }
 
+/** Structural VaultError check that also works across module-graph copies (see isJarError). */
+export function isVaultError(e: unknown): e is VaultError {
+  if (e instanceof VaultError) return true;
+  return e instanceof Error && e.name === "VaultError" && typeof (e as unknown as { code?: unknown }).code === "string";
+}
+
 export interface VaultDeps {
   accounts: AccountRepo;
   sessions: SessionVault;

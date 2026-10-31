@@ -36,6 +36,18 @@ export class JarError extends Error {
   }
 }
 
+/**
+ * Recognises a JarError even when it comes from another copy of this module (the vault singleton can be
+ * created from a different module graph, e.g. Turbopack dev or split server bundles), where instanceof fails.
+ */
+export function isJarError(e: unknown): e is JarError {
+  if (e instanceof JarError) return true;
+  if (!(e instanceof Error) || e.name !== "JarError") return false;
+  const o = e as unknown as { code?: unknown; missing?: unknown };
+  if (typeof o.code !== "string") return false;
+  return o.missing === undefined || (Array.isArray(o.missing) && o.missing.every((m) => typeof m === "string"));
+}
+
 const bareDomain = (d: string) => d.trim().toLowerCase().replace(/^\.+/, "");
 
 /** Allowlist from PROTOCOL §1.1. */

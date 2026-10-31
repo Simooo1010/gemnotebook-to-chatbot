@@ -11,8 +11,8 @@ import {
   isSecureEnv,
   sessionCookie,
 } from "@/lib/auth/session";
-import { JarError, jarSummary } from "@/lib/vault/jar";
-import { VaultError, type Vault } from "@/lib/vault/vault";
+import { isJarError, jarSummary } from "@/lib/vault/jar";
+import { isVaultError, type Vault } from "@/lib/vault/vault";
 import type { Account } from "@/lib/vault/storage";
 
 type Env = Record<string, string | undefined>;
@@ -137,7 +137,7 @@ export async function listAccountViews(vault: Vault): Promise<AccountView[]> {
 }
 
 function vaultFailure(e: unknown): Response {
-  if (e instanceof VaultError) {
+  if (isVaultError(e)) {
     return e.code === "not_found" ? err(404, "not_found", "Account not found.") : err(409, e.code, "Not available.");
   }
   return err(500, "server_error", "Something went wrong. Nothing was changed.");
@@ -196,9 +196,10 @@ export async function handleImport(request: Request, deps: OwnerDeps): Promise<R
       account: { id: account.id, label: account.label, status: account.status, createdAt: account.createdAt.toISOString(), cookieNameCount: summary.names.length },
     });
   } catch (e) {
-    if (e instanceof JarError) {
-      // Cookie NAMES only, never values.
-      return err(400, e.code, IMPORT_MESSAGES[e.code] ?? "Import failed.", e.code === "missing_required" ? { missing: e.missing } : undefined);
+    if (isJarError(e)) {
+      // Cookie NAMES only, never values (copied as plain strings; nothing else from the error is echoed).
+      const missing = (e.missing ?? []).map(String);
+      return err(400, e.code, IMPORT_MESSAGES[e.code] ?? "Import failed.", e.code === "missing_required" ? { missing } : undefined);
     }
     return vaultFailure(e);
   }
