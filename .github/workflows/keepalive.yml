@@ -1,0 +1,26 @@
+# Keeps the Google sessions warm: calls the app's keep-alive route every 15 minutes (SPEC §4, session expiry).
+# Needs a repository VARIABLE APP_URL (https production URL, no trailing slash) and a repository SECRET CRON_SECRET
+# (same value as the CRON_SECRET environment variable on Vercel). Skipped silently while either is empty.
+name: keepalive
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      APP_URL: ${{ vars.APP_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Call keep-alive
+        if: ${{ env.APP_URL != '' && env.CRON_SECRET != '' }}
+        run: |
+          curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL}/api/cron/keepalive" > /dev/null
