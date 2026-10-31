@@ -5,16 +5,11 @@ import { listAccountViews, type AccountView } from "@/lib/owner/handlers";
 import { getVault } from "@/lib/vault";
 import { getOAuthDeps } from "@/lib/oauth";
 import type { OAuthClient } from "@/lib/oauth/store";
-import { AppActionButton, ImportForm, KillButton, RevokeAllButton, SignOutButton } from "./VaultClient";
+import { AccountCard } from "./AccountCard";
+import { AppActionButton, ImportForm, RevokeAllButton, SignOutButton } from "./VaultClient";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Vault · NotebookLM connector" };
-
-const STATUS_LABEL: Record<AccountView["status"], string> = {
-  active: "Active",
-  needs_reauth: "Needs sign-in again",
-  disabled: "Disabled",
-};
 
 export default async function VaultPage() {
   const jar = await cookies();
@@ -49,17 +44,7 @@ export default async function VaultPage() {
       ) : (
         <ul className="list">
           {accounts.map((a) => (
-            <li key={a.id} className="card">
-              <div className="row">
-                <strong>{a.label}</strong>
-                <span className={`badge ${a.status}`}>{STATUS_LABEL[a.status]}</span>
-              </div>
-              <p className="meta">
-                Added {a.createdAt.slice(0, 10)}
-                {a.cookieNameCount !== null ? ` · ${a.cookieNameCount} cookie names stored` : ""}
-              </p>
-              {a.status !== "disabled" ? <KillButton id={a.id} name={a.label} /> : null}
-            </li>
+            <AccountCard key={a.id} a={a} />
           ))}
         </ul>
       )}

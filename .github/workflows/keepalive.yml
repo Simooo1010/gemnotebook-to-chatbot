@@ -21,6 +21,13 @@ jobs:
       - name: Call keep-alive
         if: ${{ env.APP_URL != '' && env.CRON_SECRET != '' }}
         run: |
-          curl --fail --silent --show-error --max-time 30 \
+          # Print only the HTTP status line (never headers with secrets or the body). Fail the job on any non-2xx
+          # (503 = at least one account is in error / needs_reauth) so GitHub emails the owner.
+          status=$(curl --silent --show-error --max-time 60 --output /dev/null --write-out '%{http_code}' \
             -H "Authorization: Bearer ${CRON_SECRET}" \
-            "${APP_URL}/api/cron/keepalive" > /dev/null
+            "${APP_URL%/}/api/cron/keepalive") || status="curl-failed"
+          echo "keep-alive HTTP status: ${status}"
+          case "${status}" in
+            2??) ;;
+            *) echo "::error::keep-alive failed (status ${status}); check the vault page for accounts that need re-import"; exit 1 ;;
+          esac
