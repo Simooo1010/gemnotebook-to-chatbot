@@ -288,8 +288,32 @@ describe("list, kill, revoke-all", () => {
     const body = await text(res);
     expect(body).not.toMatch(/SECRET-|SID|NID|envelope|emailHash/);
     const [a] = JSON.parse(body).accounts;
-    expect(Object.keys(a).sort()).toEqual(["cookieNameCount", "createdAt", "id", "label", "status"]);
+    expect(Object.keys(a).sort()).toEqual(["cookieNameCount", "createdAt", "id", "label", "sessionReadable", "status"]);
     expect(a.cookieNameCount).toBe(3);
+    expect(a.sessionReadable).toBe(true);
+  });
+
+  it("flags an undecryptable stored session as sessionReadable=false without changing the status or leaking details", async () => {
+    const { deps, accounts, sessions } = setup();
+    const id = JSON.parse(await text(await handleImport(authed("/api/vault/accounts", importBody("A")), deps))).account.id;
+    // Same storage, different key: what happens when MASTER_SECRET / VAULT_ENCRYPTION_KEY changes.
+    const otherKeyring = loadKeyring({ VAULT_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString("base64"), VAULT_KEY_VERSION: "1" });
+    const rekeyed = createVault({ accounts, sessions, keyring: otherKeyring });
+    const res = await handleListAccounts(get("/api/vault/accounts", { cookie: ownerCookie() }), { ...deps, getVault: () => rekeyed });
+    expect(res.status).toBe(200);
+    const raw = await text(res);
+    expect(raw).not.toMatch(/SECRET-|VaultCryptoError|vault: operation failed|envelope/);
+    const [a] = JSON.parse(raw).accounts;
+    expect(a).toMatchObject({ status: "active", cookieNameCount: null, sessionReadable: false });
+    expect((await accounts.get(id))!.status).toBe("active"); // stored status untouched
+  });
+
+  it("a transient storage failure is not reported as an unreadable session", async () => {
+    const { deps, vault } = setup();
+    await handleImport(authed("/api/vault/accounts", importBody("A")), deps);
+    const flaky = { ...vault, getJar: async () => Promise.reject(new Error("db down")) } as unknown as typeof vault;
+    const res = await handleListAccounts(get("/api/vault/accounts", { cookie: ownerCookie() }), { ...deps, getVault: () => flaky });
+    expect(JSON.parse(await text(res)).accounts[0]).toMatchObject({ cookieNameCount: null, sessionReadable: true });
   });
 
   it("kill disables the account and removes the sealed session", async () => {

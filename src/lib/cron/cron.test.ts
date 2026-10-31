@@ -4,6 +4,7 @@ import { AccountNeedsReauthError, CooldownActiveError, RegionGateError } from "@
 import { createRotationLimiter } from "@/lib/google/keepalive";
 import { createThrottle } from "@/lib/google/throttle";
 import { fakeClock, homepageHtml, res, scriptedFetch, synthJar, SYN_SID } from "@/lib/google/testing";
+import { VaultCryptoError } from "@/lib/vault/crypto";
 import { RpcAuthError, RpcDriftError, RpcQuotaError } from "@/lib/rpc/errors";
 import type { Account } from "@/lib/vault/storage";
 import { authorizeCron } from "./auth";
@@ -148,6 +149,44 @@ describe("runKeepAliveSweep", () => {
       { id: "acc-2", status: "error" },
     ]);
     expect(JSON.stringify(r)).not.toContain(SYN_SID);
+  });
+
+  it("an undecryptable stored session is reported as error with reason unreadable_session; the stored status is untouched", async () => {
+    const clock = fakeClock();
+    const statuses: string[] = [];
+    const { fetch } = scriptedFetch([]);
+    const r = await runKeepAliveSweep({
+      vault: {
+        listAccounts: async () => [acct(1)],
+        getJar: async () => {
+          throw new VaultCryptoError();
+        },
+        updateJar: async () => undefined,
+      },
+      accounts: { setStatus: async (id, st) => void statuses.push(`${id}:${st}`) },
+      fetch,
+      limiter: createRotationLimiter({ now: clock.now }),
+      throttle: createThrottle({ now: clock.now, sleep: clock.sleep, random: () => 0 }),
+      now: clock.now,
+      sleep: clock.sleep,
+      random: () => 0,
+    });
+    expect(r.results).toEqual([{ id: "acc-1", status: "error", reason: "unreadable_session" }]);
+    expect(statuses).toEqual([]);
+    const h = await handleKeepAlive(req(`Bearer ${SECRET}`), {
+      env,
+      getDeps: () => ({
+        vault: { listAccounts: async () => [acct(1)], getJar: async () => Promise.reject(new VaultCryptoError()), updateJar: async () => undefined },
+        accounts: { setStatus: async () => undefined },
+        fetch,
+        limiter: createRotationLimiter({ now: clock.now }),
+        throttle: createThrottle({ now: clock.now, sleep: clock.sleep, random: () => 0 }),
+        now: clock.now,
+        sleep: clock.sleep,
+        random: () => 0,
+      }),
+    });
+    expect(h.status).toBe(503);
   });
 
   it("zero active accounts is a clean no-op", async () => {

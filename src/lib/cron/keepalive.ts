@@ -1,6 +1,7 @@
 // Keep-alive sweep: rotate cookies for every ACTIVE account, one at a time, within a time budget. Pure composition: all I/O injected.
 // The result carries account ids and statuses only (never cookies, labels or error text).
 import { CooldownActiveError } from "@/lib/google/errors";
+import { VaultCryptoError } from "@/lib/vault/crypto";
 import { keepAliveAccount, type KeepAliveVault, type RotationLimiter } from "@/lib/google/keepalive";
 import type { FetchLike } from "@/lib/google/http";
 import { MAX_GAP_MS, MIN_GAP_MS, type Throttle } from "@/lib/google/throttle";
@@ -14,7 +15,7 @@ const MAX_ROTATE_TIMEOUT_MS = 15_000;
 export type SweepStatus = "rotated" | "skipped" | "needs_reauth" | "error" | "cooldown";
 
 export interface SweepResult {
-  results: { id: string; status: SweepStatus }[];
+  results: { id: string; status: SweepStatus; /** Present only for a known cause; never error text. */ reason?: "unreadable_session" }[];
   processed: number;
   /** Active accounts not handled because the time budget ran out. */
   skipped: number;
@@ -36,6 +37,11 @@ export interface SweepDeps {
   probeBase?: string;
 }
 
+/** Structural check (also works across module-graph copies, like isJarError). */
+function isDecryptFailure(e: unknown): boolean {
+  return e instanceof VaultCryptoError || (e instanceof Error && e.name === "VaultCryptoError");
+}
+
 export async function runKeepAliveSweep(d: SweepDeps): Promise<SweepResult> {
   const now = d.now ?? Date.now;
   const sleep = d.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
@@ -55,6 +61,7 @@ export async function runKeepAliveSweep(d: SweepDeps): Promise<SweepResult> {
     const remaining = deadline - now();
     if (remaining < MIN_REMAINING_MS) break;
     let status: SweepStatus;
+    let reason: "unreadable_session" | undefined;
     try {
       // Through the account's throttle, so it never overlaps a live tool call for the same account.
       const outcome = await d.throttle.schedule(a.id, () =>
@@ -70,8 +77,10 @@ export async function runKeepAliveSweep(d: SweepDeps): Promise<SweepResult> {
       status = outcome;
     } catch (e) {
       status = e instanceof CooldownActiveError ? "cooldown" : "error";
+      // The stored session cannot be decrypted (key changed): report it, but never touch the stored account status.
+      if (isDecryptFailure(e)) reason = "unreadable_session";
     }
-    results.push({ id: a.id, status });
+    results.push(reason ? { id: a.id, status, reason } : { id: a.id, status });
   }
   const skipped = active.length - results.length;
   return { results, processed: results.length, skipped, budgetExhausted: skipped > 0 };

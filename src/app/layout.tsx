@@ -44,7 +44,8 @@ form.stack{margin-top:1rem}
 .row{display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap}
 .meta{font-size:.9rem;color:var(--muted)}
 .badge{font-size:.8rem;font-weight:600;padding:.1rem .6rem;border:1px solid currentColor;border-radius:999px}
-.badge.active{color:var(--ok)}.badge.needs_reauth{color:var(--warn)}.badge.disabled{color:var(--muted)}
+.badge.active{color:var(--ok)}.badge.needs_reauth{color:var(--warn)}.badge.disabled{color:var(--muted)}.badge.unreadable{color:var(--danger)}
+.warn{color:var(--danger);font-weight:600;margin:.5rem 0}
 .confirm{display:inline-flex;flex-wrap:wrap;gap:.5rem;align-items:center}
 .steps{padding-left:1.25rem;color:var(--muted)}
 `;
