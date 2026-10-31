@@ -276,7 +276,7 @@ describe("request builders == real recorded bodies (notebooklm-py cassettes)", (
     expect(Object.fromEntries(u.searchParams)).toEqual({ bl: "B", hl: "en", _reqid: "200000", rt: "c", "f.sid": "S" });
   });
   // T3-5: recorded real rename calls (notebooks_rename.yaml, cli_notebook_rename.yaml, PY source "Home page context") use source-path "/".
-  it.fails("T3-5: rename uses source-path '/' like every recorded real call", () => {
+  it("T3-5: rename uses source-path '/' like every recorded real call", () => {
     expect(sourcePathFor("RENAME_NOTEBOOK", "00000000-0000-4000-8000-000000000001")).toBe("/");
   });
 });

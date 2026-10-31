@@ -23,7 +23,7 @@ export type RpcName = keyof typeof RPC_IDS;
 export const RPC_SCOPE: Record<RpcName, "root" | "notebook"> = {
   LIST_NOTEBOOKS: "root",
   CREATE_NOTEBOOK: "root",
-  RENAME_NOTEBOOK: "notebook",
+  RENAME_NOTEBOOK: "root", // real captures (notebooklm-py notebooks_rename.yaml): "Home page context", source-path=/
   GET_NOTEBOOK: "notebook",
   NOTEBOOK_SUMMARY: "notebook",
   ADD_SOURCE: "notebook",
