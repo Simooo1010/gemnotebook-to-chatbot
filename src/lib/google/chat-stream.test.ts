@@ -135,6 +135,12 @@ describe("chatStream transport", () => {
     expect(s.calls).toHaveLength(4);
   });
 
+  it("T3-4: 400 (expired at token) on a chat turn + live session → StaleTokenMutationError, no retry", async () => {
+    const s = await setup([rotateOk, home, () => res(400), home]);
+    await expect(s.client.chatStream(turn(s.id))).rejects.toBeInstanceOf(StaleTokenMutationError);
+    expect(s.calls.filter((c) => c.url.includes("GenerateFreeFormStreamed"))).toHaveLength(1);
+  });
+
   it("5xx and network failure are ambiguous, never retried", async () => {
     const s = await setup([rotateOk, home, () => res(503), () => Promise.reject(new TypeError("fetch failed"))]);
     await expect(s.client.chatStream(turn(s.id))).rejects.toBeInstanceOf(AmbiguousMutationError);

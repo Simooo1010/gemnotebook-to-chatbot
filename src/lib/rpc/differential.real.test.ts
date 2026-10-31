@@ -202,7 +202,7 @@ describe("live-probe error frames (verbatim from notebooklm-py tests)", () => {
     expect(() => decodeBatchResponse(e.rotate_cookies_response!, "wXbhsf")).toThrow();
   });
   // T3-4: Google answers an expired CSRF `at` with HTTP 400 + ["INVALID_CREDENTIALS"] (notebooklm-py treats 400 as an auth error and refreshes once).
-  it.fails("T3-4: HTTP 400 (expired at token) is classified as an auth error", () => {
+  it("T3-4: HTTP 400 (expired at token) is classified as an auth error", () => {
     expect(errorForHttpStatus("wXbhsf", 400)).toBeInstanceOf(RpcAuthError);
   });
 });

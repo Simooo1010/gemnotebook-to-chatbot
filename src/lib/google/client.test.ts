@@ -4,7 +4,7 @@ import { loadKeyring } from "@/lib/vault/crypto";
 import { MemoryAccountRepo, MemorySessionVault } from "@/lib/vault/memory";
 import { VaultError, createVault } from "@/lib/vault/vault";
 import { createGoogleClient, type AuditRow } from "./client";
-import { AccountNeedsReauthError, AmbiguousMutationError, CooldownActiveError, RegionGateError } from "./errors";
+import { AccountNeedsReauthError, AmbiguousMutationError, CooldownActiveError, HttpStatusError, RegionGateError, StaleTokenMutationError } from "./errors";
 import { createThrottle } from "./throttle";
 import {
   SYN_AT,
@@ -102,6 +102,33 @@ describe("google client", () => {
     // non-active account is refused by the vault before any network
     await expect(s.client.rpc(read(s.id))).rejects.toBeInstanceOf(VaultError);
     expect(s.calls).toHaveLength(5);
+  });
+
+  it("T3-4 read: HTTP 400 (expired at token) → refresh tokens once, retry once, account stays active", async () => {
+    const s = await setup([rotateOk, home, () => res(400, { body: `)]}'\n\n[["wrb.fr","${LIST}","[\\"INVALID_CREDENTIALS\\"]"]]` }), home, () => res(200, { body: batchBody(LIST, [2]) })]);
+    expect(await s.client.rpc(read(s.id))).toEqual([2]);
+    expect(s.calls).toHaveLength(5);
+    expect(s.calls.filter((c) => c.url.includes("batchexecute"))).toHaveLength(2);
+    expect((await s.accounts.get(s.id))!.status).toBe("active");
+  });
+
+  it("T3-4 read: a 400 that persists with a live session is an HTTP error, not needs_reauth", async () => {
+    const s = await setup([rotateOk, home, () => res(400), home, () => res(400)]);
+    const e = (await s.client.rpc(read(s.id)).catch((x: unknown) => x)) as Error;
+    expect(e).toBeInstanceOf(HttpStatusError);
+    expect(s.calls.filter((c) => c.url.includes("batchexecute"))).toHaveLength(2);
+    expect((await s.accounts.get(s.id))!.status).toBe("active");
+  });
+
+  it("T3-4 mutation: HTTP 400 + live session → stale-token ambiguity, never retried; signed-out probe → needs_reauth", async () => {
+    const s = await setup([rotateOk, home, () => res(400), home]);
+    const e = (await s.client.rpc(mutate(s.id)).catch((x: unknown) => x)) as Error;
+    expect(e).toBeInstanceOf(StaleTokenMutationError);
+    expect(s.calls.filter((c) => c.url.includes("batchexecute"))).toHaveLength(1);
+    expect((await s.accounts.get(s.id))!.status).toBe("active");
+    const t = await setup([rotateOk, home, () => res(400), () => res(302, { location: "https://accounts.google.com/ServiceLogin" }), () => res(200, { body: "x" })]);
+    await expect(t.client.rpc(mutate(t.id))).rejects.toBeInstanceOf(AccountNeedsReauthError);
+    expect(t.calls.filter((c) => c.url.includes("batchexecute"))).toHaveLength(1);
   });
 
   it("mutation: auth failure + signed-out probe → needs_reauth, write never retried", async () => {

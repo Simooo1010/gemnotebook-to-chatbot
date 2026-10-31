@@ -262,6 +262,9 @@ export function createGoogleClient(deps: GoogleClientDeps) {
           jar = r.jar;
           return r.result;
         } catch (e2) {
+          // A 400 that survives fresh tokens (the homepage check above found a live session) is a bad request,
+          // not a dead session: do not flag the account.
+          if (e2 instanceof RpcAuthError && e2.reason === "http_400") throw new HttpStatusError(rpcId, 400);
           if (e2 instanceof RpcAuthError) return await markReauth(call.accountId);
           throw e2;
         }

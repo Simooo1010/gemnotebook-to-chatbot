@@ -44,7 +44,7 @@ export class RpcAuthError extends RpcError {
   override readonly kind = "auth";
   constructor(
     readonly rpcId: string,
-    readonly reason: "grpc_16" | "http_401" | "http_403",
+    readonly reason: "grpc_16" | "http_400" | "http_401" | "http_403",
   ) {
     super(`RPC ${rpcId}: authentication failed (${reason})`);
   }
@@ -74,6 +74,9 @@ export function errorForHttpStatus(
   status: number,
   retryAfterHeader?: string | null,
 ): RpcError | null {
+  // Google answers an expired CSRF `at` token with HTTP 400 (+ ["INVALID_CREDENTIALS"]); the reference client
+  // (notebooklm-py _runtime/helpers.py::is_auth_error) treats 400 as an auth failure and refreshes the tokens.
+  if (status === 400) return new RpcAuthError(rpcId, "http_400");
   if (status === 401) return new RpcAuthError(rpcId, "http_401");
   if (status === 403) return new RpcAuthError(rpcId, "http_403");
   if (status === 429) {
