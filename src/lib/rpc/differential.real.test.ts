@@ -154,7 +154,7 @@ describe("real captures: chat stream", () => {
     }
   });
   // T3-3: citation excerpts are polluted with link-annotation URLs (scrubbed to example.com here).
-  it.fails("T3-3: citation excerpt text contains no link-annotation URL strings", () => {
+  it("T3-3: citation excerpt text contains no link-annotation URL strings", () => {
     const withLinks = ans().citations.filter((c) => /https?:\/\//.test(c.text));
     expect(withLinks).toEqual([]);
     // Clean spans only: markers like "[ edit]" survive, the href inside the link annotation does not.
@@ -164,7 +164,7 @@ describe("real captures: chat stream", () => {
 
 describe("real captures: source text", () => {
   // T3-2: hizoJc tree: blocks [start,end,[spans...],[kind],..., listId...]; concatenating every string leaf adds list ids and link URLs.
-  it.fails("T3-2: decoded source text length equals the document range and has no link/list-id noise", () => {
+  it("T3-2: decoded source text length equals the document range and has no link/list-id noise", () => {
     const { result } = dec("source-text");
     const tree = ((result as unknown[][])[3]![0] as unknown[][])[0] as number[][];
     const lastEnd = (tree[tree.length - 1] as number[])[1]!;

@@ -35,7 +35,7 @@ const ANSWER = "SYNTHETIC_ANSWER_TEXT_a1";
 const src = (id: string, status: Source["status"], title = `Title ${id.slice(-2)}`): Source => ({ id, title, typeCode: 5, type: "web_page", status, url: N, wordCount: N, createdSec: N });
 const nb = (...sources: Source[]) => ({ id: NB, title: "T", sources }) as unknown as NotebookDetail;
 
-const cite = (chunk: string, source: string | null, text: string, score = 0.5) => [[chunk], [N, N, score, [[N, 0, 10]], [[text]], source ? [[[source]]] : N]];
+const cite = (chunk: string, source: string | null, text: string, score = 0.5) => [[chunk], [N, N, score, [[N, 0, 10]], [[[0, text.length, [[[0, text.length, [text, []]]], [N, 1]]]]], source ? [[[source]]] : N]];
 function chunk(text: string, o: { cites?: unknown[]; final?: boolean; thinking?: boolean; suggested?: string[] } = {}) {
   const doc = [N, N, N, o.cites ?? [], o.thinking ? 0 : 1];
   const inner = [[text, N, ["sess", "turn"], N, doc], N, N, N, o.final ?? false, [(o.suggested ?? []).map((q) => [q])]];

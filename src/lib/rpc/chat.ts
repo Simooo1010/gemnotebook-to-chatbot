@@ -1,6 +1,6 @@
 import { parseEnvelopes } from "./decode";
 import { RpcAuthError, RpcNoFramesError, RpcQuotaError, RpcStatusError } from "./errors";
-import { collectStrings, findUuid, optIndex } from "./rows";
+import { blockTreeText, collectStrings, findUuid, optIndex } from "./rows";
 
 /** PROTOCOL §3.3 streamed chat response parsing. Pure. */
 
@@ -42,7 +42,7 @@ function decodeCitation(cite: unknown, index: number): Citation {
     sourceId: findUuid(optIndex(cite, [1, 5])),
     score: typeof score === "number" ? score : null,
     range: typeof s === "number" && typeof e === "number" ? { start: s, end: e } : null,
-    text: collectStrings(optIndex(cite, [1, 4, 0])).join(""),
+    text: blockTreeText(optIndex(cite, [1, 4, 0])),
   };
 }
 

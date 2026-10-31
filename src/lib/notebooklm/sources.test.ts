@@ -345,7 +345,7 @@ describe("addSourceYoutube / addSourceText / addSourceDrive", () => {
 });
 
 describe("getSourceText / getSourceGuide", () => {
-  const textResult = (text: string) => [[N, "Doc title"], N, N, [[text]]];
+  const textResult = (text: string) => [[N, "Doc title"], N, N, [[[0, text.length, [[[0, text.length, [text]]], [N, 1]]]]]];
 
   it("reads a ready source: notebook lookup (read) then hizoJc (read) with the plain-text params", async () => {
     const t = setup([() => notebookResult([srcRow(5, "Doc", { status: 2 })]), () => textResult("hello ")]);

@@ -57,6 +57,42 @@ export function collectStrings(v: unknown, out: string[] = [], depth = 0): strin
   return out;
 }
 
+function isSpan(v: unknown): v is [number, number, [string, ...unknown[]]] {
+  return (
+    Array.isArray(v) &&
+    typeof v[0] === "number" &&
+    typeof v[1] === "number" &&
+    Array.isArray(v[2]) &&
+    typeof v[2][0] === "string"
+  );
+}
+
+function spanText(v: unknown, out: string[], depth = 0): void {
+  if (isSpan(v)) out.push(v[2][0]);
+  else if (Array.isArray(v) && depth < 64) for (const x of v) spanText(x, out, depth + 1);
+}
+
+/**
+ * Text of a document block tree (source text `hizoJc` result[3][0], chat citation `cite[1][4][0]`).
+ * A block is `[start, end, [[leaf spans...], [kind]], ...]`, a leaf span is `[start, end, [text, style...]]`.
+ * Only `span[2][0]` is text: every other string in the tree is a list marker, link href or style info.
+ * Spans of one block are joined without separator (their ranges are contiguous), blocks with "\n".
+ * PY reference: notebooklm-py `_web/rows/documents.py::build_blocks`.
+ */
+export function blockTreeText(tree: unknown): string {
+  const blocks: string[] = [];
+  const walk = (node: unknown, depth: number) => {
+    if (!Array.isArray(node) || depth > 8) return;
+    if (typeof node[0] === "number" && typeof node[1] === "number") {
+      const parts: string[] = [];
+      spanText(node, parts);
+      blocks.push(parts.join(""));
+    } else for (const x of node) walk(x, depth + 1); // wrapper lists around the blocks
+  };
+  walk(tree, 0);
+  return blocks.join("\n");
+}
+
 // --- notebooks ---
 export type NotebookRole = "owner" | "editor" | "viewer" | "unknown";
 export interface Notebook {
@@ -202,7 +238,7 @@ export function decodeSourceGuide(result: unknown, rpcId: string): { summary: st
 
 export function decodeSourceText(result: unknown, rpcId: string): { title: string | null; text: string } {
   const tree = safeIndex(result, [3, 0], rpcId);
-  return { title: optStr(result, [0, 1]), text: collectStrings(tree).join("") };
+  return { title: optStr(result, [0, 1]), text: blockTreeText(tree) };
 }
 
 export function decodeLastConversationId(result: unknown, rpcId: string): string | null {
