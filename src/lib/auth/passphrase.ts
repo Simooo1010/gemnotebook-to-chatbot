@@ -61,6 +61,8 @@ export interface LimiterOptions {
 export interface LimitDecision {
   allowed: boolean;
   retryAfterMs: number;
+  /** True when the attempt was refused because the limiter's storage is missing or failing (not because of a real limit). */
+  unavailable?: boolean;
 }
 
 /** In-memory: N failures within the window per key → locked out for lockoutMs. */

@@ -53,3 +53,21 @@ describe("buildHealthReport", () => {
     expect(buildHealthReport({ VAULT_ENCRYPTION_KEY: "k", MASTER_SECRET: master }, "x").keys.vault).toBe(false);
   });
 });
+
+describe("buildHealthReport storage", () => {
+  const prod = { NODE_ENV: "production" };
+  it("production without both Supabase variables is ok:false, storage:false (booleans only)", () => {
+    for (const env of [prod, { ...prod, SUPABASE_URL: "https://x" }, { ...prod, SUPABASE_SERVICE_ROLE_KEY: "k" }, { ...prod, SUPABASE_URL: "https://x", SUPABASE_SERVICE_ROLE_KEY: "  " }]) {
+      const r = buildHealthReport(env, "x");
+      expect(r.ok).toBe(false);
+      expect(r.storage).toBe(false);
+    }
+  });
+  it("production with both is ok:true; outside production a missing store is not a failure", () => {
+    const secret = "service-role-secret-value";
+    const r = buildHealthReport({ ...prod, SUPABASE_URL: "https://x.supabase.co", SUPABASE_SERVICE_ROLE_KEY: secret }, "x");
+    expect(r).toMatchObject({ ok: true, storage: true });
+    expect(JSON.stringify(r)).not.toContain(secret);
+    expect(buildHealthReport({ NODE_ENV: "development" }, "x")).toMatchObject({ ok: true, storage: false });
+  });
+});

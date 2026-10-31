@@ -23,7 +23,7 @@ export interface LoginLimiter {
   recordSuccess(key: string): void | Promise<void>;
 }
 
-const DENY: LimitDecision = { allowed: false, retryAfterMs: STORE_ERROR_RETRY_MS };
+const DENY: LimitDecision = { allowed: false, retryAfterMs: STORE_ERROR_RETRY_MS, unavailable: true };
 
 /** Always denies. Used in production when no store is configured (fail closed). */
 export function createDenyLimiter(): LoginLimiter {

@@ -25,7 +25,8 @@ export const OWNER_PASSPHRASE_ENV = ["OWNER_PASSPHRASE", "OWNER_PASSPHRASE_HASH"
 export type RequiredEnvName = (typeof REQUIRED_ENV)[number];
 
 export interface HealthReport {
-  ok: true;
+  /** False in production when the required storage env (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) is missing. */
+  ok: boolean;
   service: typeof SERVICE_NAME;
   version: string;
   env: Record<RequiredEnvName, boolean>;
@@ -33,6 +34,8 @@ export interface HealthReport {
   ownerPassphrase: boolean;
   /** Booleans only: vault key / signing key resolvable (explicit variable, or a long enough MASTER_SECRET). */
   keys: { vault: boolean; signing: boolean };
+  /** Booleans only: both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set (required in production; without them sign-in and OAuth fail closed). */
+  storage: boolean;
 }
 
 /** Pure: builds the health report from an env-like map. A name counts as set only if non-blank. */
@@ -51,5 +54,7 @@ export function buildHealthReport(
     vault: isSet("VAULT_ENCRYPTION_KEY") ? isSet("VAULT_KEY_VERSION") : masterOk,
     signing: isSet("OAUTH_SIGNING_KEY") ? env.OAUTH_SIGNING_KEY!.length >= MASTER_MIN_CHARS : masterOk,
   };
-  return { ok: true, service: SERVICE_NAME, version, env: flags, ownerPassphrase: OWNER_PASSPHRASE_ENV.some(isSet), keys };
+  const storage = isSet("SUPABASE_URL") && isSet("SUPABASE_SERVICE_ROLE_KEY");
+  const ok = storage || env.NODE_ENV !== "production";
+  return { ok, service: SERVICE_NAME, version, env: flags, ownerPassphrase: OWNER_PASSPHRASE_ENV.some(isSet), keys, storage };
 }
