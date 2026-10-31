@@ -2,6 +2,11 @@
 
 Written for a phone. Do the steps in order. Never paste a secret into chat: you paste secrets only into the Vercel or GitHub settings screens.
 
+## 0. Merge the release (one tap)
+Everything is built, reviewed and tested in a sandbox, but it is **not on production yet**: the production merge was delegated to Claude only after the real-data run, which needs your Google account, so it waits for you.
+1. GitHub → repository `gemnotebook-to-chatbot` → Pull requests → **Release v1** → if it says Draft press **Ready for review** → **Merge pull request** → Confirm.
+2. Vercel builds production by itself (about 1 minute). Your production address is shown in Vercel → project → Domains (normally `https://gemnotebook-to-chatbot.vercel.app`). Until you finish steps a–c the app deliberately answers "not configured" and touches nothing.
+
 ## a. Supabase (the database)
 1. Open supabase.com, pick the project you want to use (or create a new one).
 2. Project Settings → API. Copy the **Project URL** and the **service_role** key (not the anon key). Keep them for step b.

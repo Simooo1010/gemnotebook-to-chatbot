@@ -75,3 +75,7 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
 - `scripts/probe-google.mjs` runs as `prebuild` on Vercel only (unauthenticated GET of the homepage from the build machine; metadata only; never fails the build). Result is read from the deployment build log and recorded here. Runtime function IPs may differ from build IPs; the signed-in check in the final manual run is the real test.
 
 **Probe result (2026-10-30, Vercel build machine iad1, deployment for commit 6faa3ce):** unauthenticated GET `notebook.google.com/?hl=en` → single hop, HTTP 200, `gate:false`, no sign-in redirect (= normal signed-out landing page; no `location=unsupported`). Early signal only: Plan B (owner-hosted worker) NOT triggered. Not proof for signed-in RPC from runtime IPs; the real check is the final manual run.
+
+## Release status (2026-10-31)
+- Gates: 1 lint/build/tests ✅ (546 passed) · 2 real-data run ❌ NOT run (needs owner's Google session) · 3 independent review ✅ SHIP (no blocker/high/medium) · 4 walkthrough ✅ 137/137 in sandbox (real device pending) · 5 screenshots ✅ 40 PNGs, light/dark × phone/desktop.
+- Production merge NOT done by Claude: the CLAUDE.md delegation requires all gates incl. gate 2 and verified owner setup. Release PR 'Release v1' (base main, head step-8-qa) is ready; owner merges it as step 0 of SETUP-FOR-OWNER.md.
