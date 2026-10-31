@@ -89,3 +89,13 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
 ## Fix loop log (owner-authorised: push + merge fixes, 2026-10-31)
 - **Consent Approve did nothing (owner report).** Cause: site-wide CSP `form-action 'self'`; Chromium blocks the consent form POST ('Sending form data ... violates form-action'). Fix: the consent page alone gets `form-action 'self' https: http://localhost:* http://127.0.0.1:*` (src/lib/csp.ts, next.config.ts). Proven in a real browser: old policy FAILS, fixed policy passes (docs/qa/consent-redirect.mjs, run with a fresh `next dev` and kill stale servers first). Earlier QA missed it because the harness intercepted /oauth/consent itself.
 - Earlier today: importer accepted only `SID`; now `SID` or `__Secure-1PSID` (PR #11).
+- **Real-data fix loop, branch `fix/real-data` (Tester 3: 20 sanitized REAL notebooklm-py captures, `differential.real.test.ts`; every fixed id flipped from `it.fails` to a passing `it`):**
+  - T3-1 (BLOCKER) fixed: `[]`, null, `[null]`, `[[]]` decode to an empty list for notebooks, artifacts, last conversation id, summary; first audio/video overview on a notebook with no artifacts and `studio_status` now work (operation-level test with the real `[]` shape). Genuine drift still raises.
+  - T3-2/T3-3 fixed: source text and citation excerpts take only `span[2][0]` (real source: 8407 clean chars instead of 11414; no URLs in the 7 real citations).
+  - T3-4 fixed: HTTP 400 (expired `at`) is an auth failure; reads refresh tokens once and retry once, mutations/chat keep no-retry (homepage probe decides needs_reauth vs StaleTokenMutationError); a 400 that survives fresh tokens is an HttpStatusError.
+  - T3-5 fixed: notebook rename uses source-path `/`.
+  - T3-6 fixed: Drive add reconciles by type + created time (+ file id when the row links one), not title.
+  - T3-7/T3-8 fixed (live-unverified, evidence-backed): media GET sends `Referer {base}/` + `Sec-Fetch-Site: cross-site`; media-only in-memory cookie view re-scopes domain-wide `.google.com` cookies (minus OSID/__Secure-OSID, host-only) onto `*.googleusercontent.com`, never stored, never for other hosts (security regression tests in `media-cookies.test.ts`).
+  - T3-9 fixed: chat response cap 2 MiB -> 8 MiB (configurable).
+  - T3-11 fixed: no empty `bl=`; RotateCookies sends the browser UA.
+  - NOT fixed, by decision: T3-10 (follow-up `history=null`, no real follow-up capture; `it.todo`), and the SID/cookie question (owner's live run decides).

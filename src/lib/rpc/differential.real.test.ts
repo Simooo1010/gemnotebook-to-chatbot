@@ -176,6 +176,14 @@ describe("real captures: source text", () => {
   });
 });
 
+// T3-10 (NOT fixed, reported only): notebooklm-py sends `history` (prior turns, newest pair first) with a supplied
+// conversation id; we send history=null. No real follow-up capture exists in any reference repo, so whether the
+// server continues the thread without history is unproven. Mitigation if the owner's live run shows lost context:
+// rebuild history via khqZz (GET_CONVERSATION_TURNS, chat_get_history.yaml).
+describe("T3-10 follow-up history", () => {
+  it.todo("follow-up turn with a conversation id: confirm against a real capture whether history=null continues the thread");
+});
+
 describe("live-probe error frames (verbatim from notebooklm-py tests)", () => {
   const e = JSON.parse(readFileSync(path.join(__dirname, "__fixtures__", "error-frames.json"), "utf8")) as Record<string, string>;
   it("CREATE_ARTIFACT on a source-less notebook: status [3]", () => {
