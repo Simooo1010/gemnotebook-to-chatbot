@@ -1,0 +1,6 @@
+{
+ "source": "teng-lin/notebooklm-py @0fcc842 tests/cassettes/web/server_add_file.yaml (recorded, SANITIZED: ids -> synthetic uuids, free text -> same-length filler, URLs -> example.com / synthetic lh3)",
+ "rpcId": "rLM1Ne",
+ "note": "uploaded file source still preparing: status [null,5], type code 0, no url",
+ "body": ")]}'\n\n510\n[[\"wrb.fr\",\"rLM1Ne\",\"[[\\\"Lpl Lplxotpxei Lplxotpx (Lplx 8)\\\",[[[\\\"00000000-0000-4000-8000-000000000022\\\"],\\\"lplx-lplxot-1vp2a2z_\\\",[null,null,[1781131378,548405000],null,0,null,null,null,null,null,null,null,null,null,[1781131378,548405000]],[null,5]]],\\\"00000000-0000-4000-8000-000000000023\\\",\\\"📓\\\",null,[1,false,true,null,null,[1781132189,189839000],1,false,[1778847080,80920000],null,null,null,false,true,1,false,null,true,1],null,null,null,[true,true,true],[6,500,300,500000,2]]]\",null,null,null,\"generic\"]]\n55\n[[\"di\",232],[\"af.httprm\",232,\"5177862644762354036\",10]]\n25\n[[\"e\",4,null,null,32594]]\n"
+}

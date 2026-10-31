@@ -1,0 +1,6 @@
+{
+ "source": "teng-lin/notebooklm-py @0fcc842 tests/cassettes/web/notebook_zero_sources.yaml (recorded, SANITIZED: ids -> synthetic uuids, free text -> same-length filler, URLs -> example.com / synthetic lh3)",
+ "rpcId": "rLM1Ne",
+ "note": "notebook with no sources",
+ "body": ")]}'\n\n373\n[[\"wrb.fr\",\"rLM1Ne\",\"[[\\\"T8.E5 lplxotp lplxo lplxotpxe\\\",null,\\\"00000000-0000-4000-8000-000000000024\\\",\\\"\\\",null,[1,false,true,null,null,[1778873028,229919000],1,false,[1778873014,99457000],null,null,null,false,true,1,false,null,true,1],null,null,null,[true,true,true],[6,500,300,500000,2]]]\",null,null,null,\"generic\"],[\"di\",147],[\"af.httprm\",146,\"4448936487322653086\",10]]\n23\n[[\"e\",4,null,null,411]]\n"
+}

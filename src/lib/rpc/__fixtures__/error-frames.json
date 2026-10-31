@@ -1,0 +1,7 @@
+{
+ "source": "teng-lin/notebooklm-py tests/_fixtures/rpc_error_frames.py (live probe 2026-08-13, verbatim) + cassettes auth_rotate_cookies_refresh.yaml / mind_maps_interactive.yaml",
+ "create_invalid_argument": ")]}'\n\n104\n[[\"wrb.fr\",\"R7cb6c\",null,null,null,[3],\"generic\"],[\"di\",64],[\"af.httprm\",64,\"0000000000000000000\",10]]\n25\n[[\"e\",4,null,null,140]]\n",
+ "retry_not_found": ")]}'\n\n107\n[[\"wrb.fr\",\"Rytqqe\",null,null,null,[5],\"generic\"],[\"di\",113],[\"af.httprm\",113,\"-0000000000000000000\",11]]\n25\n[[\"e\",4,null,null,143]]\n",
+ "stale_csrf_http400": ")]}'\n\n59\n[[\"wrb.fr\",\"wXbhsf\",\"[\\\"INVALID_CREDENTIALS\\\"]\",null,null]]\n",
+ "rotate_cookies_response": ")]}'\n\n[[\"identity.hfcr\",600],[\"di\",27]]"
+}

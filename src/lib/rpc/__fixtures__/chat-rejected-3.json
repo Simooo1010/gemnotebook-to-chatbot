@@ -1,0 +1,6 @@
+{
+ "source": "teng-lin/notebooklm-py @0fcc842 tests/cassettes/web/chat_ask_oversized_rejection.yaml (recorded, SANITIZED: ids -> synthetic uuids, free text -> same-length filler, URLs -> example.com / synthetic lh3)",
+ "rpcId": "GenerateFreeFormStreamed",
+ "note": "verbatim: wrb.fr null id, status [3]; request had an EMPTY source list [[]]",
+ "body": ")]}'\n\n36\n[[\"wrb.fr\",null,null,null,null,[3]]]\n55\n[[\"di\",156],[\"af.httprm\",156,\"-8343793854737661657\",8]]\n23\n[[\"e\",4,null,null,132]]\n"
+}
