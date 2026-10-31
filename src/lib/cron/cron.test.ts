@@ -194,6 +194,58 @@ describe("handlers", () => {
     expect(await b.text()).not.toContain("hunter2");
   });
 
+  it("keep-alive: 503 (statuses only) when any account is error or needs_reauth; 200 for rotated, skipped, cooldown or exhausted budget", async () => {
+    const bad = await handleKeepAlive(req(`Bearer ${SECRET}`), { env, getDeps: () => sweepSetup([acct(1)], { fetchStatus: 500 }).deps });
+    expect(bad.status).toBe(503);
+    const text = await bad.text();
+    expect(JSON.parse(text).results).toEqual([{ id: "acc-1", status: "error" }]);
+    expect(text).not.toContain("Label-1");
+
+    // needs_reauth (sign-in redirect) is also a failure
+    const clock = fakeClock();
+    const { fetch } = scriptedFetch([() => res(401), () => res(200, { body: '<a class="landing-header-signin">Sign in</a>' })]);
+    const reauth = await handleKeepAlive(req(`Bearer ${SECRET}`), {
+      env,
+      getDeps: () => ({
+        vault: { listAccounts: async () => [acct(1)], getJar: async () => synthJar(), updateJar: async () => undefined },
+        accounts: { setStatus: async () => undefined },
+        fetch,
+        limiter: createRotationLimiter({ now: clock.now }),
+        throttle: createThrottle({ now: clock.now, sleep: clock.sleep, random: () => 0 }),
+        now: clock.now,
+        sleep: clock.sleep,
+        random: () => 0,
+        probeBase: "https://notebooklm.google.com",
+      }),
+    });
+    expect(reauth.status).toBe(503);
+
+    // legitimate skip: rotation limiter says "too soon" -> 200
+    const s = sweepSetup([acct(1)]);
+    s.deps.limiter.mark("acc-1");
+    const skipped = await handleKeepAlive(req(`Bearer ${SECRET}`), { env, getDeps: () => s.deps });
+    expect(skipped.status).toBe(200);
+    expect((await skipped.json()).results).toEqual([{ id: "acc-1", status: "skipped" }]);
+
+    // cooldown (quota back-off) -> 200
+    const c2 = fakeClock();
+    const throttle = createThrottle({ now: c2.now, sleep: c2.sleep, random: () => 0 });
+    throttle.noteQuota("acc-1");
+    const cool = await handleKeepAlive(req(`Bearer ${SECRET}`), {
+      env,
+      getDeps: () => ({ ...sweepSetup([acct(1)]).deps, throttle }),
+    });
+    expect(cool.status).toBe(200);
+  });
+
+  it("deep health: 503 when any account is not ok (quota back-off excepted)", async () => {
+    const mk = (err?: Error) => () => ({ listAccounts: async () => [acct(1)], listNotebooks: async () => (err ? Promise.reject(err) : {}) });
+    expect((await handleDeepHealth(req(`Bearer ${SECRET}`), { env, getDeps: mk(new AccountNeedsReauthError("a")) })).status).toBe(503);
+    expect((await handleDeepHealth(req(`Bearer ${SECRET}`), { env, getDeps: mk(new Error("x")) })).status).toBe(503);
+    expect((await handleDeepHealth(req(`Bearer ${SECRET}`), { env, getDeps: mk(new CooldownActiveError("a", 1000)) })).status).toBe(200);
+    expect((await handleDeepHealth(req(`Bearer ${SECRET}`), { env, getDeps: mk() })).status).toBe(200);
+  });
+
   it("deep health: same gate, then per-account statuses only", async () => {
     const getDeps = () => ({ listAccounts: async () => [acct(1)], listNotebooks: async () => ({ notebooks: [{ title: "Secret Notebook Name" }] }) });
     expect((await handleDeepHealth(req(), { env, getDeps })).status).toBe(401);
