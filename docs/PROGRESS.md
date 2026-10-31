@@ -79,3 +79,9 @@ Read after CLAUDE.md, WORKFLOW.md and SPEC.md. Updated in the same commit as eve
 ## Release status (2026-10-31)
 - Gates: 1 lint/build/tests ✅ (546 passed) · 2 real-data run ❌ NOT run (needs owner's Google session) · 3 independent review ✅ SHIP (no blocker/high/medium) · 4 walkthrough ✅ 137/137 in sandbox (real device pending) · 5 screenshots ✅ 40 PNGs, light/dark × phone/desktop.
 - Production merge NOT done by Claude: the CLAUDE.md delegation requires all gates incl. gate 2 and verified owner setup. Release PR 'Release v1' (base main, head step-8-qa) is ready; owner merges it as step 0 of SETUP-FOR-OWNER.md.
+
+## Final-run progress (2026-10-31)
+- Release v1 merged (main 11c7e4f; conflicts with earlier docs commits on main resolved by hand, all decision-log rows kept).
+- Supabase `notebook-connector` (ref zqifmidzktzcsglhojdc, eu-west-3) via Composio: migrations 0001–0003 applied and verified live (9 tables, RLS on, 0 policies, 0 grants to anon/authenticated).
+- Vercel env created by Claude: SUPABASE_URL (prod+preview), PUBLIC_BASE_URL (prod only). Owner to add: SUPABASE_SERVICE_ROLE_KEY, OWNER_PASSPHRASE, MASTER_SECRET, CRON_SECRET (secrets deliberately not created by Claude).
+- Next: owner adds the 4 secrets → redeploy production → /api/health → import Google account → add connector → live checks (gate 2).
