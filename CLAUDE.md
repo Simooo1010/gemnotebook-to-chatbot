@@ -102,3 +102,7 @@ supabase/                 migrations (0001_vault.sql, 0002_oauth.sql, 0003_harde
 - **Spend order:** critical path first (vault → auth → notebooks/sources → audio/video overview → chat). Polish and extras last. If credits run short, cut from the end of the build order, never from checks or safety rules.
 - **No waste:** no polling or sleep loops (events wake the session); don't re-read files already in context; parallel subagents only for independent work that pays off; one batched tool call over many small ones.
 - **Resume-safe:** every step ends committed + pushed, and `docs/PROGRESS.md` is updated in the same commit (done / in progress / next / open questions). A session that starts cold reads CLAUDE.md, WORKFLOW, SPEC, PROGRESS and continues without asking the owner to repeat anything.
+
+## Language
+
+Chat with me in Italian. Write all code, comments, commit messages, docs, config files, skills and subagent prompts in English. Exception: deliverables explicitly meant for Italian readers stay in Italian.
